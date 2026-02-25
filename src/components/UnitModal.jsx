@@ -59,7 +59,7 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Nome da unidade</label>
                                 <input
                                     className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-colors shadow-sm dark:shadow-none"
-                                    placeholder="Ex: SENAI - Centro de Treinamento"
+                                    placeholder="CTTI - Centro de Treinamento da Tecnologia da Informação"
                                     value={formData.nome}
                                     onChange={e => setFormData({ ...formData, nome: e.target.value })}
                                 />
@@ -155,7 +155,7 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-4">
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Contrato</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Contrato de telefonia</label>
                                 <input
                                     className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors"
                                     placeholder="Nº do Contrato"

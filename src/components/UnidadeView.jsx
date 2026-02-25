@@ -15,6 +15,7 @@ export function UnidadeView() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [units, setUnits] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [openDropdownId, setOpenDropdownId] = useState(null);
 
     useEffect(() => {
         fetchUnits();
@@ -46,6 +47,20 @@ export function UnidadeView() {
     }
 
     async function handleSaveUnit(unitData) {
+        // Validation check for duplicates EXCEPT for 'FIEMG Sede'
+        if (unitData.nome !== 'FIEMG Sede') {
+            const isDuplicate = units.some((u) =>
+                u.nome !== 'FIEMG Sede' &&
+                ((unitData.uo && u.uo === unitData.uo) ||
+                    (unitData.faixaRamais && u.faixaRamais === unitData.faixaRamais))
+            );
+
+            if (isDuplicate) {
+                alert('Já existe uma unidade cadastrada com esta mesma UO ou Faixa de Ramais!');
+                return;
+            }
+        }
+
         try {
             const { error } = await supabase
                 .from('unidades')
@@ -65,17 +80,6 @@ export function UnidadeView() {
 
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-            <header className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Gerenciamento de Unidades</h2>
-                <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition-all"
-                >
-                    <Plus className="w-4 h-4" />
-                    Nova Unidade
-                </button>
-            </header>
-
             <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white dark:bg-[#1c1f26] p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
                 <div className="relative w-full sm:w-96 group">
                     <Search className="absolute inset-y-0 left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors w-4 h-4" />
@@ -93,6 +97,13 @@ export function UnidadeView() {
                     <button className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                         <Download className="w-4 h-4" />
                         Exportar
+                    </button>
+                    <button
+                        onClick={() => setIsModalOpen(true)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition-all shrink-0"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Nova Unidade
                     </button>
                 </div>
             </div>
@@ -149,10 +160,30 @@ export function UnidadeView() {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                                             {unit.linhasAtivas || 0}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 transition-colors p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
+                                            <button
+                                                onClick={() => setOpenDropdownId(openDropdownId === unit.id ? null : unit.id)}
+                                                className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 transition-colors p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                                            >
                                                 <MoreVertical className="w-4 h-4" />
                                             </button>
+
+                                            {openDropdownId === unit.id && (
+                                                <div className="absolute right-8 top-10 mt-2 w-32 bg-white dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl z-50 py-1 overflow-hidden">
+                                                    <button
+                                                        onClick={() => { console.log('Editar', unit.id); setOpenDropdownId(null); }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                                                    >
+                                                        Editar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => { console.log('Excluir', unit.id); setOpenDropdownId(null); }}
+                                                        className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                                                    >
+                                                        Excluir
+                                                    </button>
+                                                </div>
+                                            )}
                                         </td>
                                     </tr>
                                 ))}
