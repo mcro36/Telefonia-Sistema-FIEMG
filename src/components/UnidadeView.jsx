@@ -154,14 +154,14 @@ export function UnidadeView() {
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-[#1c1f26] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-h-[400px] flex flex-col transition-colors">
+            <div className="bg-white dark:bg-[#1c1f26] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm min-h-[400px] flex flex-col transition-colors">
                 {isLoading ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-3">
                         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
                         <p className="text-sm">Carregando unidades...</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto flex-1 pb-24">
+                    <div className="overflow-visible flex-1 pb-24 px-1">
                         <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
                             <thead className="bg-slate-50 dark:bg-[#111621]">
                                 <tr>
