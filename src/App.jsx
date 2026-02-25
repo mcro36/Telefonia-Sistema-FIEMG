@@ -82,7 +82,7 @@ export default function App() {
                             className="h-[68px] w-auto object-contain dark:brightness-0 dark:invert transition-all"
                         />
                     </div>
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white text-center mb-8 transition-colors duration-300">Telefonia do Sistema FIEMG</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white text-center mb-8 transition-colors duration-300">Inventário de Telefonia</h2>
 
                     <form className="space-y-4" onSubmit={handleLogin}>
                         <div className="space-y-1.5">
