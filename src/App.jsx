@@ -6,12 +6,58 @@ import { LinesView } from './components/LinhasView.jsx';
 import { ExtensionsView } from './components/RamaisView.jsx';
 import { Bell, Search, Plus, PhoneCall, ListOrdered, Bot } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from './lib/supabase.js';
+import { useEffect } from 'react';
 
 export default function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
-    const [isLoggedIn, setIsLoggedIn] = useState(true); // Simulating login for demo
+    const [session, setSession] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [authError, setAuthError] = useState(null);
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-    if (!isLoggedIn) {
+    useEffect(() => {
+        // Obter sessão inicial
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+            setLoading(false);
+        });
+
+        // Ouvir mudanças na autenticação
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setIsLoggingIn(true);
+        setAuthError(null);
+
+        const { error } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (error) {
+            setAuthError(error.message);
+        }
+        setIsLoggingIn(false);
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-[#0a0c10] flex items-center justify-center">
+                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        );
+    }
+
+    if (!session) {
         return (
             <div className="min-h-screen bg-[#0a0c10] flex items-center justify-center p-4">
                 <motion.div
@@ -19,33 +65,56 @@ export default function App() {
                     animate={{ opacity: 1, y: 0 }}
                     className="w-full max-w-md bg-[#1c1f26] border border-slate-800 rounded-2xl p-8 shadow-2xl"
                 >
-                    <div className="flex justify-center mb-8">
-                        <div className="bg-blue-600/20 p-4 rounded-2xl text-blue-500">
-                            <Plus className="w-12 h-12 rotate-45" />
-                        </div>
+                    <div className="flex justify-center mb-10">
+                        <img
+                            src="https://www.fiemg.com.br/wp-content/uploads/2023/02/Ativo-1-1.png"
+                            alt="Logo FIEMG"
+                            className="h-12 w-auto object-contain"
+                        />
                     </div>
                     <h2 className="text-2xl font-bold text-white text-center mb-2">Telefonia do Sistema FIEMG</h2>
                     <p className="text-slate-400 text-center mb-8">Acesse o console administrativo</p>
 
-                    <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); setIsLoggedIn(true); }}>
+                    <form className="space-y-4" onSubmit={handleLogin}>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium text-slate-300">Usuário/E-mail</label>
                             <input
-                                type="text"
+                                type="email"
+                                required
                                 className="w-full bg-[#111621] border border-slate-800 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                placeholder="Digite seu usuário ou e-mail"
+                                placeholder="Digite seu e-mail"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                             />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium text-slate-300">Senha</label>
                             <input
                                 type="password"
+                                required
                                 className="w-full bg-[#111621] border border-slate-800 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                                 placeholder="Digite sua senha"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
                             />
                         </div>
-                        <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-600/20 transition-all mt-4">
-                            Entrar
+
+                        {authError && (
+                            <p className="text-red-500 text-xs font-medium animate-in fade-in slide-in-from-top-1">
+                                {authError === 'Invalid login credentials' ? 'E-mail ou senha incorretos' : authError}
+                            </p>
+                        )}
+
+                        <button
+                            disabled={isLoggingIn}
+                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-600/20 transition-all mt-4 flex items-center justify-center gap-2"
+                        >
+                            {isLoggingIn ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    Entrando...
+                                </>
+                            ) : 'Entrar'}
                         </button>
                     </form>
 
@@ -85,11 +154,11 @@ export default function App() {
                         <div className="h-8 w-px bg-slate-800 mx-2"></div>
                         <div className="flex items-center gap-3">
                             <div className="text-right hidden sm:block">
-                                <p className="text-sm font-medium text-white leading-none">Ana Silva</p>
-                                <p className="text-xs text-slate-500 mt-1">Gerente de TI</p>
+                                <p className="text-sm font-medium text-white leading-none">{session.user.email.split('@')[0]}</p>
+                                <p className="text-xs text-slate-500 mt-1">Usuário Autenticado</p>
                             </div>
-                            <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-500 font-bold text-xs">
-                                AS
+                            <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-500 font-bold text-xs uppercase">
+                                {session.user.email[0]}
                             </div>
                         </div>
                     </div>
