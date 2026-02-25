@@ -4,10 +4,11 @@ import { DashboardView } from './components/DashboardView.jsx';
 import { UnidadeView } from './components/UnidadeView.jsx';
 import { LinesView } from './components/LinhasView.jsx';
 import { ExtensionsView } from './components/RamaisView.jsx';
-import { Bell, Search, Plus, PhoneCall, ListOrdered, Bot } from 'lucide-react';
+import { Bell, Search, Plus, PhoneCall, ListOrdered, Bot, Moon, Sun } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from './lib/supabase.js';
 import { useEffect } from 'react';
+import { useTheme } from './hooks/useTheme.js';
 
 export default function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
@@ -17,6 +18,7 @@ export default function App() {
     const [password, setPassword] = useState('');
     const [authError, setAuthError] = useState(null);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const { theme, toggleTheme } = useTheme();
 
     useEffect(() => {
         // Obter sessão inicial
@@ -59,40 +61,47 @@ export default function App() {
 
     if (!session) {
         return (
-            <div className="min-h-screen bg-[#0a0c10] flex items-center justify-center p-4">
+            <div className="min-h-screen bg-slate-50 dark:bg-[#0a0c10] flex items-center justify-center p-4 transition-colors duration-300">
+                <button
+                    onClick={toggleTheme}
+                    className="absolute top-6 right-6 p-3 rounded-full bg-white dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-500 shadow-lg hover:shadow-xl transition-all"
+                    title={`Mudar para modo ${theme === 'dark' ? 'claro' : 'escuro'}`}
+                >
+                    {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                </button>
+
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="w-full max-w-md bg-[#1c1f26] border border-slate-800 rounded-2xl p-8 shadow-2xl"
+                    className="w-full max-w-md bg-white dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-2xl p-8 shadow-2xl transition-colors duration-300"
                 >
                     <div className="flex justify-center mb-10">
                         <img
                             src="https://www.fiemg.com.br/wp-content/uploads/2023/02/Ativo-1-1.png"
                             alt="Logo FIEMG"
-                            className="h-12 w-auto object-contain"
+                            className="h-[68px] w-auto object-contain dark:brightness-100 brightness-0"
                         />
                     </div>
-                    <h2 className="text-2xl font-bold text-white text-center mb-2">Telefonia do Sistema FIEMG</h2>
-                    <p className="text-slate-400 text-center mb-8">Acesse o console administrativo</p>
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white text-center mb-8 transition-colors duration-300">Telefonia do Sistema FIEMG</h2>
 
                     <form className="space-y-4" onSubmit={handleLogin}>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-300">Usuário/E-mail</label>
+                            <label className="text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors duration-300">Usuário</label>
                             <input
                                 type="email"
                                 required
-                                className="w-full bg-[#111621] border border-slate-800 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                className="w-full bg-slate-50 dark:bg-[#111621] border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                                 placeholder="Digite seu e-mail"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-300">Senha</label>
+                            <label className="text-sm font-medium text-slate-600 dark:text-slate-300 transition-colors duration-300">Senha</label>
                             <input
                                 type="password"
                                 required
-                                className="w-full bg-[#111621] border border-slate-800 rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                className="w-full bg-slate-50 dark:bg-[#111621] border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-3 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                                 placeholder="Digite sua senha"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
@@ -121,7 +130,7 @@ export default function App() {
                     <div className="mt-8 flex justify-center gap-4 text-xs font-bold text-slate-500 uppercase tracking-widest">
                         <span>SESI</span>
                         <span>SENAI</span>
-                        <span>FIEMG</span>
+                        <span>CIEMG</span>
                         <span>IEL</span>
                     </div>
                 </motion.div>
@@ -130,14 +139,14 @@ export default function App() {
     }
 
     return (
-        <div className="flex h-screen bg-[#0a0c10] text-slate-100 overflow-hidden font-sans">
+        <div className="flex h-screen bg-slate-50 dark:bg-[#0a0c10] text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-300">
             <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
                 {/* Header */}
-                <header className="h-16 flex items-center justify-between px-8 bg-[#0a0c10] border-b border-slate-800 shrink-0 z-10">
+                <header className="h-16 flex items-center justify-between px-8 bg-white dark:bg-[#0a0c10] border-b border-slate-200 dark:border-slate-800 shrink-0 z-10 transition-colors duration-300">
                     <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-semibold text-white tracking-tight">
+                        <h2 className="text-xl font-semibold text-slate-900 dark:text-white tracking-tight">
                             {activeTab === 'dashboard' ? 'Dashboard Geral' :
                                 activeTab === 'units' ? 'Gerenciamento de Unidades' :
                                     activeTab === 'lines' ? 'Gerenciamento de Linhas' :
@@ -147,17 +156,24 @@ export default function App() {
                         </h2>
                     </div>
                     <div className="flex items-center gap-4">
-                        <button className="relative p-2 text-slate-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-full transition-all">
-                            <Bell className="w-5 h-5" />
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0a0c10]"></span>
+                        <button
+                            onClick={toggleTheme}
+                            className="relative p-2 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-blue-500/10 rounded-full transition-all"
+                            title={`Mudar para modo ${theme === 'dark' ? 'claro' : 'escuro'}`}
+                        >
+                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
                         </button>
-                        <div className="h-8 w-px bg-slate-800 mx-2"></div>
+                        <button className="relative p-2 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-blue-500/10 rounded-full transition-all">
+                            <Bell className="w-5 h-5" />
+                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-[#0a0c10]"></span>
+                        </button>
+                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>
                         <div className="flex items-center gap-3">
                             <div className="text-right hidden sm:block">
-                                <p className="text-sm font-medium text-white leading-none">{session.user.email.split('@')[0]}</p>
-                                <p className="text-xs text-slate-500 mt-1">Usuário Autenticado</p>
+                                <p className="text-sm font-medium text-slate-900 dark:text-white leading-none">{session.user.email.split('@')[0]}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Usuário Autenticado</p>
                             </div>
-                            <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-blue-500 font-bold text-xs uppercase">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-600/20 flex items-center justify-center text-blue-600 dark:text-blue-500 font-bold text-xs uppercase">
                                 {session.user.email[0]}
                             </div>
                         </div>

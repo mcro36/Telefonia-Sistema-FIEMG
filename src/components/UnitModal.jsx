@@ -32,33 +32,33 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                     initial={{ opacity: 0, scale: 0.95, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="relative w-full max-w-4xl bg-[#1c1f26] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-800"
+                    className="relative w-full max-w-4xl bg-white dark:bg-[#1c1f26] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-slate-200 dark:border-slate-800 transition-colors"
                 >
                     {/* Header */}
-                    <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between bg-[#1c1f26]">
+                    <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-[#1c1f26] transition-colors">
                         <div>
-                            <h2 className="text-xl font-bold text-white leading-tight">Cadastrar Nova Unidade</h2>
-                            <p className="text-sm text-slate-400 mt-1">Preencha os dados abaixo para adicionar uma nova unidade à base.</p>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Cadastrar Nova Unidade</h2>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Preencha os dados abaixo para adicionar uma nova unidade à base.</p>
                         </div>
-                        <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
+                        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
                             <X className="w-6 h-6" />
                         </button>
                     </div>
 
                     {/* Content */}
-                    <div className="overflow-y-auto p-6 md:p-8 custom-scrollbar bg-[#1c1f26]">
+                    <div className="overflow-y-auto p-6 md:p-8 custom-scrollbar bg-white dark:bg-[#1c1f26] transition-colors">
                         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                             <div className="col-span-1 md:col-span-12">
-                                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-4 flex items-center gap-2">
+                                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-500 mb-4 flex items-center gap-2">
                                     <BuildingIcon className="w-4 h-4" />
                                     Dados Gerais
                                 </h3>
                             </div>
 
                             <div className="col-span-1 md:col-span-8">
-                                <label className="block text-sm font-medium text-slate-300 mb-1.5">Nome da unidade</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Nome da unidade</label>
                                 <input
-                                    className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-600"
+                                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-colors shadow-sm dark:shadow-none"
                                     placeholder="Ex: SENAI - Centro de Treinamento"
                                     value={formData.nome}
                                     onChange={e => setFormData({ ...formData, nome: e.target.value })}
@@ -66,9 +66,9 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-4">
-                                <label className="block text-sm font-medium text-slate-300 mb-1.5">Entidade</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Entidade</label>
                                 <select
-                                    className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 appearance-none"
+                                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 appearance-none transition-colors shadow-sm dark:shadow-none"
                                     value={formData.entidade}
                                     onChange={e => setFormData({ ...formData, entidade: e.target.value })}
                                 >
@@ -81,9 +81,9 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-8">
-                                <label className="block text-sm font-medium text-slate-300 mb-1.5">Endereço Completo</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Endereço Completo</label>
                                 <input
-                                    className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-600"
+                                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-colors shadow-sm dark:shadow-none"
                                     placeholder="Rua, Número, Bairro"
                                     value={formData.endereco}
                                     onChange={e => setFormData({ ...formData, endereco: e.target.value })}
@@ -91,9 +91,9 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-4">
-                                <label className="block text-sm font-medium text-slate-300 mb-1.5">Cidade</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Cidade</label>
                                 <input
-                                    className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-600"
+                                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-colors shadow-sm dark:shadow-none"
                                     placeholder="Ex: Belo Horizonte"
                                     value={formData.cidade}
                                     onChange={e => setFormData({ ...formData, cidade: e.target.value })}
@@ -104,11 +104,11 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                                 <label className="inline-flex items-center gap-3 cursor-pointer group">
                                     <input
                                         type="checkbox"
-                                        className="peer h-5 w-5 rounded border-slate-800 bg-transparent text-blue-600 focus:ring-blue-500"
+                                        className="peer h-5 w-5 rounded border-slate-200 dark:border-slate-800 bg-transparent text-blue-600 focus:ring-blue-500 transition-colors"
                                         checked={formData.unidadeIntegrada}
                                         onChange={e => setFormData({ ...formData, unidadeIntegrada: e.target.checked })}
                                     />
-                                    <span className="text-sm font-medium text-slate-300 group-hover:text-blue-400 transition-colors">Esta é uma Unidade Integrada?</span>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Esta é uma Unidade Integrada?</span>
                                 </label>
                             </div>
 
@@ -116,12 +116,12 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                                 <motion.div
                                     initial={{ opacity: 0, height: 0 }}
                                     animate={{ opacity: 1, height: 'auto' }}
-                                    className="col-span-1 md:col-span-12 bg-blue-600/5 border border-blue-600/20 rounded-lg p-4"
+                                    className="col-span-1 md:col-span-12 bg-blue-50 dark:bg-blue-600/5 border border-blue-200 dark:border-blue-600/20 rounded-lg p-4 transition-colors"
                                 >
-                                    <label className="block text-sm font-medium text-slate-300 mb-1.5">Vincular a Unidade Principal</label>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Vincular a Unidade Principal</label>
                                     <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 w-4 h-4" />
-                                        <input className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-600" placeholder="Pesquisar unidade principal..." />
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                                        <input className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors" placeholder="Pesquisar unidade principal..." />
                                     </div>
                                     <p className="text-xs text-slate-500 mt-2">Selecione a unidade "pai" à qual esta nova unidade responderá.</p>
                                 </motion.div>
@@ -135,9 +135,9 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-4">
-                                <label className="block text-sm font-medium text-slate-300 mb-1.5">UO (Unidade Organizacional)</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">UO (Unidade Organizacional)</label>
                                 <input
-                                    className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-600"
+                                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors"
                                     placeholder="Ex: 1020"
                                     value={formData.uo}
                                     onChange={e => setFormData({ ...formData, uo: e.target.value })}
@@ -145,9 +145,9 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-4">
-                                <label className="block text-sm font-medium text-slate-300 mb-1.5">Central de Custo</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Central de Custo</label>
                                 <input
-                                    className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-600"
+                                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors"
                                     placeholder="Ex: CC-2024"
                                     value={formData.centroCusto}
                                     onChange={e => setFormData({ ...formData, centroCusto: e.target.value })}
@@ -155,9 +155,9 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-4">
-                                <label className="block text-sm font-medium text-slate-300 mb-1.5">Contrato</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Contrato</label>
                                 <input
-                                    className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-600"
+                                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors"
                                     placeholder="Nº do Contrato"
                                     value={formData.contrato}
                                     onChange={e => setFormData({ ...formData, contrato: e.target.value })}
@@ -165,16 +165,16 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-12">
-                                <label className="block text-sm font-medium text-slate-300 mb-1.5">Faixa de Ramais</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Faixa de Ramais</label>
                                 <div className="flex flex-col md:flex-row gap-4 items-center">
                                     <div className="relative flex-1 w-full">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] font-bold">DE</span>
-                                        <input className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4" placeholder="0000" type="number" />
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-600 text-[10px] font-bold">DE</span>
+                                        <input className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors" placeholder="0000" type="number" />
                                     </div>
-                                    <ArrowRightAltIcon className="text-slate-600 hidden md:block" />
+                                    <ArrowRightAltIcon className="text-slate-400 dark:text-slate-600 hidden md:block" />
                                     <div className="relative flex-1 w-full">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 text-[10px] font-bold">ATÉ</span>
-                                        <input className="w-full rounded-lg border-slate-800 bg-[#111318] text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4" placeholder="9999" type="number" />
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-600 text-[10px] font-bold">ATÉ</span>
+                                        <input className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors" placeholder="9999" type="number" />
                                     </div>
                                 </div>
                             </div>
@@ -182,10 +182,10 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                     </div>
 
                     {/* Footer */}
-                    <div className="px-6 py-4 bg-[#1c1f26] border-t border-slate-800 flex justify-end gap-3 rounded-b-xl">
+                    <div className="px-6 py-4 bg-slate-50 dark:bg-[#1c1f26] border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 rounded-b-xl transition-colors">
                         <button
                             onClick={onClose}
-                            className="px-6 py-2.5 rounded-lg border border-slate-800 text-slate-300 font-medium hover:bg-slate-800 transition-colors"
+                            className="px-6 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors bg-white dark:bg-transparent shadow-sm dark:shadow-none"
                         >
                             Cancelar
                         </button>
