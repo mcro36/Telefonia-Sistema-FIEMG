@@ -79,7 +79,7 @@ export default function App() {
                         <img
                             src="https://www.fiemg.com.br/wp-content/uploads/2023/02/Ativo-1-1.png"
                             alt="Logo FIEMG"
-                            className="h-[68px] w-auto object-contain dark:brightness-100 brightness-0"
+                            className="h-[68px] w-auto object-contain dark:brightness-0 dark:invert transition-all"
                         />
                     </div>
                     <h2 className="text-2xl font-bold text-slate-800 dark:text-white text-center mb-8 transition-colors duration-300">Telefonia do Sistema FIEMG</h2>
