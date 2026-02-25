@@ -16,6 +16,7 @@ export function UnidadeView() {
     const [units, setUnits] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [openDropdownId, setOpenDropdownId] = useState(null);
+    const [unitToEdit, setUnitToEdit] = useState(null);
 
     useEffect(() => {
         fetchUnits();
@@ -46,10 +47,30 @@ export function UnidadeView() {
         }
     }
 
+    async function handleDeleteUnit(id) {
+        if (!window.confirm("Atenção: Tem certeza que deseja excluir esta unidade? Esta ação apagará permanentemente todos os ramais e linhas associadas a ela.")) {
+            return;
+        }
+        try {
+            const { error } = await supabase
+                .from('unidades')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            fetchUnits();
+        } catch (error) {
+            console.error('Error deleting unit:', error);
+            // Fallback for demo mode
+            setUnits(units.filter(u => u.id !== id));
+        }
+    }
+
     async function handleSaveUnit(unitData) {
         // Validation check for duplicates EXCEPT for 'FIEMG Sede'
         if (unitData.nome !== 'FIEMG Sede') {
             const isDuplicate = units.some((u) =>
+                u.id !== unitData.id &&
                 u.nome !== 'FIEMG Sede' &&
                 ((unitData.uo && u.uo === unitData.uo) ||
                     (unitData.faixaRamais && u.faixaRamais === unitData.faixaRamais))
@@ -62,20 +83,45 @@ export function UnidadeView() {
         }
 
         try {
-            const { error } = await supabase
-                .from('unidades')
-                .insert([unitData]);
+            if (unitData.id) {
+                const { error } = await supabase
+                    .from('unidades')
+                    .update(unitData)
+                    .eq('id', unitData.id);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from('unidades')
+                    .insert([unitData]);
+                if (error) throw error;
+            }
 
-            if (error) throw error;
             fetchUnits();
             setIsModalOpen(false);
+            setUnitToEdit(null);
         } catch (error) {
             console.error('Error saving unit:', error);
             // For demo, just close and add to local state
-            const newUnit = { ...unitData, id: Math.random().toString() };
-            setUnits([...units, newUnit]);
+            if (unitData.id) {
+                setUnits(units.map(u => u.id === unitData.id ? unitData : u));
+            } else {
+                const newUnit = { ...unitData, id: Math.random().toString() };
+                setUnits([...units, newUnit]);
+            }
             setIsModalOpen(false);
+            setUnitToEdit(null);
         }
+    }
+
+    function handleOpenNew() {
+        setUnitToEdit(null);
+        setIsModalOpen(true);
+    }
+
+    function handleOpenEdit(unit) {
+        setUnitToEdit(unit);
+        setIsModalOpen(true);
+        setOpenDropdownId(null);
     }
 
     return (
@@ -99,7 +145,7 @@ export function UnidadeView() {
                         Exportar
                     </button>
                     <button
-                        onClick={() => setIsModalOpen(true)}
+                        onClick={handleOpenNew}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition-all shrink-0"
                     >
                         <Plus className="w-4 h-4" />
@@ -115,7 +161,7 @@ export function UnidadeView() {
                         <p className="text-sm">Carregando unidades...</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto flex-1">
+                    <div className="overflow-x-auto flex-1 pb-24">
                         <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
                             <thead className="bg-slate-50 dark:bg-[#111621]">
                                 <tr>
@@ -171,13 +217,13 @@ export function UnidadeView() {
                                             {openDropdownId === unit.id && (
                                                 <div className="absolute right-8 top-10 mt-2 w-32 bg-white dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl z-50 py-1 overflow-hidden">
                                                     <button
-                                                        onClick={() => { console.log('Editar', unit.id); setOpenDropdownId(null); }}
+                                                        onClick={() => handleOpenEdit(unit)}
                                                         className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                                                     >
                                                         Editar
                                                     </button>
                                                     <button
-                                                        onClick={() => { console.log('Excluir', unit.id); setOpenDropdownId(null); }}
+                                                        onClick={() => handleDeleteUnit(unit.id)}
                                                         className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                                                     >
                                                         Excluir
@@ -209,8 +255,12 @@ export function UnidadeView() {
 
             <UnitModal
                 isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setUnitToEdit(null);
+                }}
                 onSave={handleSaveUnit}
+                unitToEdit={unitToEdit}
             />
         </div>
     );

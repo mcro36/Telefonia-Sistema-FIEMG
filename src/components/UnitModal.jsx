@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export function UnitModal({ isOpen, onClose, onSave }) {
+export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
     const [formData, setFormData] = useState({
         nome: '',
         entidade: 'SESI',
@@ -14,6 +14,26 @@ export function UnitModal({ isOpen, onClose, onSave }) {
         contrato: '',
         faixaRamais: '0000 - 9999'
     });
+
+    useEffect(() => {
+        if (isOpen) {
+            if (unitToEdit) {
+                setFormData(unitToEdit);
+            } else {
+                setFormData({
+                    nome: '',
+                    entidade: 'SESI',
+                    cidade: '',
+                    endereco: '',
+                    unidadeIntegrada: false,
+                    uo: '',
+                    centroCusto: '',
+                    contrato: '',
+                    faixaRamais: '0000 - 9999'
+                });
+            }
+        }
+    }, [isOpen, unitToEdit]);
 
     if (!isOpen) return null;
 
@@ -37,8 +57,12 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                     {/* Header */}
                     <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-[#1c1f26] transition-colors">
                         <div>
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Cadastrar Nova Unidade</h2>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Preencha os dados abaixo para adicionar uma nova unidade à base.</p>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">
+                                {unitToEdit ? 'Editar Unidade' : 'Cadastrar Nova Unidade'}
+                            </h2>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                {unitToEdit ? 'Atualize os dados da unidade abaixo.' : 'Preencha os dados abaixo para adicionar uma nova unidade à base.'}
+                            </p>
                         </div>
                         <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
                             <X className="w-6 h-6" />
@@ -193,7 +217,7 @@ export function UnitModal({ isOpen, onClose, onSave }) {
                             onClick={() => onSave(formData)}
                             className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-lg shadow-blue-600/20 transition-all"
                         >
-                            Salvar Unidade
+                            {unitToEdit ? 'Atualizar Unidade' : 'Salvar Unidade'}
                         </button>
                     </div>
                 </motion.div>
