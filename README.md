@@ -22,6 +22,14 @@ Sistema de gestão de telefonia enterprise para o Sistema FIEMG (SESI, SENAI, IE
 
 O esquema do banco de dados está disponível no arquivo `supabase-schema.sql` na raiz do projeto. Ele contém a criação das tabelas `unidades`, `linhas` e `ramais` com colunas em português e políticas de RLS configuradas.
 
+## 🔐 Autenticação
+
+Para habilitar o acesso seguro:
+1. No painel do **Supabase**, vá em **Authentication > Providers** e ative o provider de **Email**.
+2. Desative a opção "Confirm Email" (opcional, para facilitar o teste inicial).
+3. Vá em **Authentication > Users** e crie um usuário com e-mail e senha.
+4. Use essas credenciais na tela de login da aplicação.
+
 ## 🚀 Publicação
 
 Este projeto está configurado para deploy automático no GitHub Pages:
