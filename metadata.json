@@ -1,0 +1,5 @@
+{
+  "name": "Telefonia Sistema FIEMG",
+  "description": "Sistema avançado de gestão de telefonia, ramais, linhas e URAs com integração Supabase.",
+  "requestFramePermissions": []
+}
