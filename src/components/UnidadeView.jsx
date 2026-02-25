@@ -206,7 +206,7 @@ export function UnidadeView() {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                                             {unit.linhasAtivas || 0}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative">
+                                        <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative ${openDropdownId === unit.id ? 'z-50' : 'z-0'}`}>
                                             <button
                                                 onClick={() => setOpenDropdownId(openDropdownId === unit.id ? null : unit.id)}
                                                 className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 transition-colors p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
