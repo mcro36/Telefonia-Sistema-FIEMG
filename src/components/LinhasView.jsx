@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, Plus, Smartphone, Edit2, Trash2, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase.js';
+import { LinhaModal } from './LinhaModal.jsx';
 
 export function LinesView() {
     const [lines, setLines] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [linhaToEdit, setLinhaToEdit] = useState(null);
 
     useEffect(() => {
         fetchLines();
@@ -31,6 +34,66 @@ export function LinesView() {
         }
     }
 
+    async function handleSaveLinha(linhaData) {
+        try {
+            if (linhaData.id) {
+                const { error } = await supabase
+                    .from('linhas')
+                    .update(linhaData)
+                    .eq('id', linhaData.id);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from('linhas')
+                    .insert([linhaData]);
+                if (error) throw error;
+            }
+
+            fetchLines();
+            setIsModalOpen(false);
+            setLinhaToEdit(null);
+        } catch (error) {
+            console.error('Error saving linha:', error);
+            // Fallback for demo mode
+            if (linhaData.id) {
+                setLines(lines.map(l => l.id === linhaData.id ? linhaData : l));
+            } else {
+                const newLinha = { ...linhaData, id: Math.random().toString() };
+                setLines([...lines, newLinha]);
+            }
+            setIsModalOpen(false);
+            setLinhaToEdit(null);
+        }
+    }
+
+    async function handleDeleteLinha(id) {
+        if (!window.confirm("Atenção: Tem certeza que deseja excluir esta linha?")) {
+            return;
+        }
+        try {
+            const { error } = await supabase
+                .from('linhas')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            fetchLines();
+        } catch (error) {
+            console.error('Error deleting linha:', error);
+            setLines(lines.filter(l => l.id !== id));
+        }
+    }
+
+    function handleOpenNew() {
+        setLinhaToEdit(null);
+        setIsModalOpen(true);
+    }
+
+    function handleOpenEdit(linha) {
+        setLinhaToEdit(linha);
+        setIsModalOpen(true);
+    }
+
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
             <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
@@ -38,7 +101,9 @@ export function LinesView() {
                     <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 tracking-tight transition-colors">Gerenciamento de Linhas</h1>
                     <p className="text-slate-500 dark:text-slate-400 transition-colors">Visualize e gerencie todas as linhas telefônicas cadastradas no sistema.</p>
                 </div>
-                <button className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-5 rounded-lg shadow-sm transition-all flex items-center gap-2">
+                <button
+                    onClick={handleOpenNew}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-5 rounded-lg shadow-sm transition-all flex items-center gap-2">
                     <Plus className="w-4 h-4" />
                     Nova Linha
                 </button>
@@ -115,10 +180,14 @@ export function LinesView() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 transition-colors p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
+                                            <button
+                                                onClick={() => handleOpenEdit(line)}
+                                                className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 transition-colors p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
                                                 <Edit2 className="w-4 h-4" />
                                             </button>
-                                            <button className="text-slate-400 hover:text-red-500 transition-colors p-1 ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
+                                            <button
+                                                onClick={() => handleDeleteLinha(line.id)}
+                                                className="text-slate-400 hover:text-red-500 transition-colors p-1 ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         </td>
@@ -143,6 +212,16 @@ export function LinesView() {
                     </div>
                 </div>
             </div>
+
+            <LinhaModal
+                isOpen={isModalOpen}
+                onClose={() => {
+                    setIsModalOpen(false);
+                    setLinhaToEdit(null);
+                }}
+                onSave={handleSaveLinha}
+                linhaToEdit={linhaToEdit}
+            />
         </div>
     );
 }
