@@ -15,10 +15,20 @@ export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
         faixaRamais: '0000 - 9999'
     });
 
+    const [faixaStart, setFaixaStart] = useState('');
+    const [faixaEnd, setFaixaEnd] = useState('');
+
     useEffect(() => {
         if (isOpen) {
             if (unitToEdit) {
                 setFormData(unitToEdit);
+                if (unitToEdit.faixaRamais) {
+                    const parts = unitToEdit.faixaRamais.split(' - ');
+                    if (parts.length === 2) {
+                        setFaixaStart(parts[0]);
+                        setFaixaEnd(parts[1]);
+                    }
+                }
             } else {
                 setFormData({
                     nome: '',
@@ -29,11 +39,32 @@ export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
                     uo: '',
                     centroCusto: '',
                     contrato: '',
-                    faixaRamais: '0000 - 9999'
+                    faixaRamais: ''
                 });
+                setFaixaStart('');
+                setFaixaEnd('');
             }
         }
     }, [isOpen, unitToEdit]);
+
+    function handleLocalSave() {
+        if (!formData.uo || formData.uo.trim() === '') {
+            alert('A UO (Unidade Organizacional) é obrigatória.');
+            return;
+        }
+
+        const startLength = faixaStart.trim().length;
+        const endLength = faixaEnd.trim().length;
+
+        if (startLength !== 4 || endLength !== 4) {
+            alert('A Faixa de Ramais (DE e ATÉ) deve conter obrigatoriamente 4 dígitos em cada campo (Ex: 0000 e 9999).');
+            return;
+        }
+
+        const compiledFaixa = `${faixaStart.trim()} - ${faixaEnd.trim()}`;
+        const finalData = { ...formData, faixaRamais: compiledFaixa };
+        onSave(finalData);
+    }
 
     if (!isOpen) return null;
 
@@ -189,16 +220,36 @@ export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-12">
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Faixa de Ramais</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Faixa de Ramais (Obrigatório 4 dígitos)</label>
                                 <div className="flex flex-col md:flex-row gap-4 items-center">
                                     <div className="relative flex-1 w-full">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-600 text-[10px] font-bold">DE</span>
-                                        <input className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors" placeholder="0000" type="number" />
+                                        <input
+                                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors"
+                                            placeholder="Ex: 2000"
+                                            type="text"
+                                            maxLength={4}
+                                            value={faixaStart}
+                                            onChange={(e) => {
+                                                const val = e.target.value.replace(/\D/g, '');
+                                                setFaixaStart(val);
+                                            }}
+                                        />
                                     </div>
                                     <ArrowRightAltIcon className="text-slate-400 dark:text-slate-600 hidden md:block" />
                                     <div className="relative flex-1 w-full">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-600 text-[10px] font-bold">ATÉ</span>
-                                        <input className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors" placeholder="9999" type="number" />
+                                        <input
+                                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors"
+                                            placeholder="Ex: 2049"
+                                            type="text"
+                                            maxLength={4}
+                                            value={faixaEnd}
+                                            onChange={(e) => {
+                                                const val = e.target.value.replace(/\D/g, '');
+                                                setFaixaEnd(val);
+                                            }}
+                                        />
                                     </div>
                                 </div>
                             </div>
@@ -214,7 +265,7 @@ export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
                             Cancelar
                         </button>
                         <button
-                            onClick={() => onSave(formData)}
+                            onClick={handleLocalSave}
                             className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-lg shadow-blue-600/20 transition-all"
                         >
                             {unitToEdit ? 'Atualizar Unidade' : 'Salvar Unidade'}

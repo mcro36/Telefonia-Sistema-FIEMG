@@ -191,15 +191,30 @@ export function UnidadeView() {
                                             {unit.faixaRamais}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-emerald-500"
-                                                        style={{ width: `${Math.min(((unit.ramaisAtivos || 0) / 1000) * 100, 100)}%` }}
-                                                    />
-                                                </div>
-                                                <span>{unit.ramaisAtivos || 0}</span>
-                                            </div>
+                                            {(() => {
+                                                let count = 0;
+                                                if (unit.faixaRamais) {
+                                                    const parts = unit.faixaRamais.split(' - ');
+                                                    if (parts.length === 2) {
+                                                        const start = parseInt(parts[0], 10);
+                                                        const end = parseInt(parts[1], 10);
+                                                        if (!isNaN(start) && !isNaN(end) && end >= start) {
+                                                            count = (end - start) + 1;
+                                                        }
+                                                    }
+                                                }
+                                                return (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-emerald-500"
+                                                                style={{ width: `${Math.min(((count) / 1000) * 100, 100)}%` }}
+                                                            />
+                                                        </div>
+                                                        <span>{count}</span>
+                                                    </div>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                                             {unit.linhasAtivas || 0}
