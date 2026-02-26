@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
+export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
     const [formData, setFormData] = useState({
         nome: '',
         entidade: 'SESI',

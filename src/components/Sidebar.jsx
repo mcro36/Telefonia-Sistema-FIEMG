@@ -21,8 +21,8 @@ function cn(...inputs) {
 const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'units', label: 'Unidades', icon: Building2 },
-    { id: 'extensions', label: 'Ramais', icon: Phone },
     { id: 'lines', label: 'Linhas', icon: ListOrdered },
+    { id: 'extensions', label: 'Ramais', icon: Phone },
     { id: 'ura', label: 'URA', icon: Bot },
     { id: 'history', label: 'Histórico', icon: History },
     { id: 'charts', label: 'Gráficos', icon: BarChart3 },

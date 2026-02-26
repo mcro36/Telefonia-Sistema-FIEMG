@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Download, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
-import { UnitModal } from './UnitModal.jsx';
+import { UnidadeModal } from './UnidadeModal.jsx';
 import { supabase } from '../lib/supabase.js';
 
 const entityColors = {
@@ -163,9 +163,9 @@ export function UnidadeView() {
                         <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
                             <thead className="bg-slate-50 dark:bg-[#111621]">
                                 <tr>
-                                    <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entidade</th>
-                                    <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cidade</th>
-                                    <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nome da Unidade</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entidade</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cidade</th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Nome da Unidade</th>
                                     <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Faixa de Ramais</th>
                                     <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ramais Ativos</th>
                                     <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Linhas Ativas</th>
@@ -175,15 +175,15 @@ export function UnidadeView() {
                             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                                 {units.map((unit) => (
                                     <tr key={unit.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <td className="px-6 py-4 whitespace-nowrap text-left">
                                             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${entityColors[unit.entidade] || 'bg-slate-500/10 text-slate-400'}`}>
                                                 {unit.entidade}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-slate-600 dark:text-slate-400">
+                                        <td className="px-6 py-4 whitespace-nowrap text-left text-sm text-slate-600 dark:text-slate-400">
                                             {unit.cidade}
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                        <td className="px-6 py-4 whitespace-nowrap text-left">
                                             <div className="text-sm font-medium text-slate-900 dark:text-white">{unit.nome}</div>
                                             <div className="text-xs text-slate-500">{unit.unidadeIntegrada ? 'Unidade Integrada' : ''}</div>
                                         </td>
@@ -251,7 +251,7 @@ export function UnidadeView() {
                 </div>
             </div>
 
-            <UnitModal
+            <UnidadeModal
                 isOpen={isModalOpen}
                 onClose={() => {
                     setIsModalOpen(false);
