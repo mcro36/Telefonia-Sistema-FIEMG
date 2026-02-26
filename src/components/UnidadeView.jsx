@@ -204,15 +204,7 @@ export function UnidadeView() {
                                                     }
                                                 }
                                                 return (
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                                                            <div
-                                                                className="h-full bg-emerald-500"
-                                                                style={{ width: `${Math.min(((count) / 1000) * 100, 100)}%` }}
-                                                            />
-                                                        </div>
-                                                        <span>{count}</span>
-                                                    </div>
+                                                    <span>{count}</span>
                                                 );
                                             })()}
                                         </td>

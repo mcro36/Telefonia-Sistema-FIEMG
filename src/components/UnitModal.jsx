@@ -17,9 +17,11 @@ export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
 
     const [faixaStart, setFaixaStart] = useState('');
     const [faixaEnd, setFaixaEnd] = useState('');
+    const [errors, setErrors] = useState({ uo: false, faixaStart: false, faixaEnd: false });
 
     useEffect(() => {
         if (isOpen) {
+            setErrors({ uo: false, faixaStart: false, faixaEnd: false });
             if (unitToEdit) {
                 setFormData(unitToEdit);
                 if (unitToEdit.faixaRamais) {
@@ -48,16 +50,30 @@ export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
     }, [isOpen, unitToEdit]);
 
     function handleLocalSave() {
+        const newErrors = { uo: false, faixaStart: false, faixaEnd: false };
+        let hasError = false;
+
         if (!formData.uo || formData.uo.trim() === '') {
-            alert('A UO (Unidade Organizacional) é obrigatória.');
-            return;
+            newErrors.uo = true;
+            hasError = true;
         }
 
         const startLength = faixaStart.trim().length;
         const endLength = faixaEnd.trim().length;
 
-        if (startLength !== 4 || endLength !== 4) {
-            alert('A Faixa de Ramais (DE e ATÉ) deve conter obrigatoriamente 4 dígitos em cada campo (Ex: 0000 e 9999).');
+        if (startLength !== 4) {
+            newErrors.faixaStart = true;
+            hasError = true;
+        }
+
+        if (endLength !== 4) {
+            newErrors.faixaEnd = true;
+            hasError = true;
+        }
+
+        setErrors(newErrors);
+
+        if (hasError) {
             return;
         }
 
@@ -190,9 +206,11 @@ export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-4">
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">UO (Unidade Organizacional)</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">
+                                    UO (Unidade Organizacional) <span className="text-red-500">*</span>
+                                </label>
                                 <input
-                                    className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors"
+                                    className={`w-full rounded-lg border bg-white dark:bg-[#111318] text-slate-900 dark:text-white h-11 px-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors ${errors.uo ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-200 dark:border-slate-800 focus:border-blue-500 focus:ring-blue-500'}`}
                                     placeholder="Ex: 1020"
                                     value={formData.uo}
                                     onChange={e => setFormData({ ...formData, uo: e.target.value })}
@@ -220,12 +238,14 @@ export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
                             </div>
 
                             <div className="col-span-1 md:col-span-12">
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">Faixa de Ramais (Obrigatório 4 dígitos)</label>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 transition-colors">
+                                    Faixa de Ramais <span className="text-red-500">*</span>
+                                </label>
                                 <div className="flex flex-col md:flex-row gap-4 items-center">
                                     <div className="relative flex-1 w-full">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-600 text-[10px] font-bold">DE</span>
                                         <input
-                                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors"
+                                            className={`w-full rounded-lg border bg-white dark:bg-[#111318] text-slate-900 dark:text-white h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors ${errors.faixaStart ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-200 dark:border-slate-800 focus:border-blue-500 focus:ring-blue-500'}`}
                                             placeholder="Ex: 2000"
                                             type="text"
                                             maxLength={4}
@@ -240,7 +260,7 @@ export function UnitModal({ isOpen, onClose, onSave, unitToEdit }) {
                                     <div className="relative flex-1 w-full">
                                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-600 text-[10px] font-bold">ATÉ</span>
                                         <input
-                                            className="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111318] text-slate-900 dark:text-white focus:border-blue-500 focus:ring-blue-500 h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors"
+                                            className={`w-full rounded-lg border bg-white dark:bg-[#111318] text-slate-900 dark:text-white h-11 pl-10 pr-4 placeholder:text-slate-400 dark:placeholder:text-slate-600 shadow-sm dark:shadow-none transition-colors ${errors.faixaEnd ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-slate-200 dark:border-slate-800 focus:border-blue-500 focus:ring-blue-500'}`}
                                             placeholder="Ex: 2049"
                                             type="text"
                                             maxLength={4}
