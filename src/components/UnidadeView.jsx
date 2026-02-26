@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, MoreVertical, Loader2 } from 'lucide-react';
+import { Search, Filter, Download, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { UnitModal } from './UnitModal.jsx';
 import { supabase } from '../lib/supabase.js';
 
@@ -15,7 +15,6 @@ export function UnidadeView() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [units, setUnits] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [openDropdownId, setOpenDropdownId] = useState(null);
     const [unitToEdit, setUnitToEdit] = useState(null);
 
     useEffect(() => {
@@ -121,7 +120,6 @@ export function UnidadeView() {
     function handleOpenEdit(unit) {
         setUnitToEdit(unit);
         setIsModalOpen(true);
-        setOpenDropdownId(null);
     }
 
     return (
@@ -206,30 +204,23 @@ export function UnidadeView() {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                                             {unit.linhasAtivas || 0}
                                         </td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-medium relative ${openDropdownId === unit.id ? 'z-50' : 'z-0'}`}>
-                                            <button
-                                                onClick={() => setOpenDropdownId(openDropdownId === unit.id ? null : unit.id)}
-                                                className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 transition-colors p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
-                                            >
-                                                <MoreVertical className="w-4 h-4" />
-                                            </button>
-
-                                            {openDropdownId === unit.id && (
-                                                <div className="absolute right-8 top-10 mt-2 w-32 bg-white dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl z-50 py-1 overflow-hidden">
-                                                    <button
-                                                        onClick={() => handleOpenEdit(unit)}
-                                                        className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                                                    >
-                                                        Editar
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteUnit(unit.id)}
-                                                        className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                                                    >
-                                                        Excluir
-                                                    </button>
-                                                </div>
-                                            )}
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => handleOpenEdit(unit)}
+                                                    className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
+                                                    title="Editar Unidade"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteUnit(unit.id)}
+                                                    className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                                                    title="Excluir Unidade"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
