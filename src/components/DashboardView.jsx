@@ -48,8 +48,9 @@ export function DashboardView() {
 
                 // 2. Ramais SIP ativos count
                 const { count: sipCount, error: sErr } = await supabase
-                    .from('ramais_sip')
+                    .from('ramais')
                     .select('*', { count: 'exact', head: true })
+                    .eq('tipo', 'SIP')
                     .eq('status', 'Ativo');
 
                 // 3. Linhas (todas cadastradas)
@@ -63,12 +64,13 @@ export function DashboardView() {
                         { label: 'Ramais SIP Ativos', value: sipCount?.toString() || '0', icon: PhoneCall, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
                         { label: 'Linhas', value: linhasCount?.toString() || '0', icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10' },
                     ]);
+                } else {
+                    console.error("Dashboard dataload count errors:", uErr, sErr, lErr);
                 }
 
                 // 4. Distribution by city (Simulating Ramais por Região)
                 const { data: unitsData } = await supabase.from('unidades').select('id, cidade');
-                const { data: sipData, error: sipDataErr } = await supabase.from('ramais_sip').select('unidadeId');
-                const { data: pabxData, error: pabxDataErr } = await supabase.from('ramais_pabx').select('unidadeId');
+                const { data: ramaisData, error: ramaisDataErr } = await supabase.from('ramais').select('unidadeId');
 
                 if (unitsData) {
                     const unitCityMap = {};
@@ -82,7 +84,7 @@ export function DashboardView() {
                     const processExtensions = (extData) => {
                         if (!extData) return;
                         extData.forEach(e => {
-                            // Se a modelagem usa camelCase
+                            // modelagem camelCase ou convertida
                             const uId = e.unidadeId || e.unidade_id;
                             if (uId && unitCityMap[uId]) {
                                 const city = unitCityMap[uId];
@@ -92,8 +94,7 @@ export function DashboardView() {
                         });
                     };
 
-                    processExtensions(sipData);
-                    processExtensions(pabxData);
+                    processExtensions(ramaisData);
 
                     // Ordenar regiões pelas do maior para o menor e injetar total
                     const sortedRegions = Object.keys(regionCounts)
