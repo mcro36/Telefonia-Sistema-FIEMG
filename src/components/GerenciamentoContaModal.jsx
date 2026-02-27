@@ -1,15 +1,110 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Search, UserPlus, Edit2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Search, UserPlus, Edit2, Trash2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase.js';
+import { createClient } from '@supabase/supabase-js';
+
+// Cliente de autenticação paralelo para previnir o kick automático da sessão do admin
+const authAdminClient = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+});
 
 export function GerenciamentoContaModal({ isOpen, onClose }) {
     const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+
+    const [users, setUsers] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
+
+    // Form states
+    const [newUserName, setNewUserName] = useState('');
+    const [newUserEmail, setNewUserEmail] = useState('');
+    const [newUserRole, setNewUserRole] = useState('Viewer');
+
+    useEffect(() => {
+        if (isOpen) {
+            fetchUsers();
+        }
+    }, [isOpen]);
+
+    const fetchUsers = async () => {
+        setIsLoading(true);
+        const { data, error } = await supabase.rpc('get_users_list');
+        if (error) {
+            console.error('Erro ao buscar usuários:', error);
+            // Ignora erro calado em produção, avisa apenas console
+        } else if (data) {
+            const parsed = data.map(u => ({
+                id: u.id,
+                email: u.email,
+                name: u.raw_user_meta_data?.name || 'Sem Nome',
+                role: u.raw_user_meta_data?.role || 'Viewer',
+                avatarInitials: u.raw_user_meta_data?.avatarInitials || u.email[0].toUpperCase(),
+                is_active: u.raw_user_meta_data?.is_active ?? true // default true
+            }));
+            setUsers(parsed);
+        }
+        setIsLoading(false);
+    };
+
+    const handleToggleStatus = async (userId, currentStatus) => {
+        const newStatus = !currentStatus;
+        const { error } = await supabase.rpc('update_user_metadata', {
+            target_user_id: userId,
+            is_active: newStatus
+        });
+
+        if (error) {
+            alert('Falha ao atualizar o status do usuário.');
+        } else {
+            setUsers(users.map(u => u.id === userId ? { ...u, is_active: newStatus } : u));
+        }
+    };
+
+    const handleAddUser = async () => {
+        if (!newUserName || !newUserEmail) return alert('Por favor, preencha todos os campos!');
+        setIsCreating(true);
+
+        const defaultPassword = 'Fiemg@' + new Date().getFullYear() + '!';
+
+        const { data, error } = await authAdminClient.auth.signUp({
+            email: newUserEmail,
+            password: defaultPassword,
+            options: {
+                data: {
+                    name: newUserName,
+                    role: newUserRole,
+                    avatarInitials: newUserName[0].toUpperCase(),
+                    is_active: true
+                }
+            }
+        });
+
+        if (error) {
+            alert('Erro ao criar usuário: ' + error.message);
+            setIsCreating(false);
+        } else {
+            setNewUserName('');
+            setNewUserEmail('');
+            setNewUserRole('Viewer');
+            setIsAddUserModalOpen(false);
+            setIsCreating(false);
+            fetchUsers(); // Recarrega lista
+            setTimeout(() => alert(`Usuário criado com sucesso!\nSenha Padrão: ${defaultPassword}`), 300);
+        }
+    };
+
+    const filteredUsers = users.filter(u =>
+        u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     if (!isOpen) return null;
 
     return (
         <AnimatePresence>
-            <div className="fixed inset-0 bg-[#0a0c10]/80 backdrop-blur-sm z-50 flex flex-col pt-16 sm:pt-20 px-4 pb-4">
+            <div className="fixed inset-0 bg-[#0a0c10]/80 backdrop-blur-sm z-[99999] flex flex-col pt-16 sm:pt-20 px-4 pb-4">
                 <motion.div
                     initial={{ opacity: 0, y: 20, scale: 0.95 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -53,6 +148,8 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                                                 <Search className="w-4 h-4" />
                                             </div>
                                             <input
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
                                                 className="w-full flex-1 bg-slate-100 dark:bg-[#0a0c10] text-slate-900 dark:text-slate-100 focus:outline-0 border-none px-3 rounded-r-lg placeholder:text-slate-500 text-sm"
                                                 placeholder="Buscar usuários..."
                                             />
@@ -76,77 +173,74 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                                                 <th className="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm font-semibold uppercase tracking-wider">Nome</th>
                                                 <th className="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm font-semibold uppercase tracking-wider">E-mail</th>
                                                 <th className="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm font-semibold uppercase tracking-wider">Perfil</th>
-                                                <th className="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm font-semibold uppercase tracking-wider text-center">Status</th>
+                                                <th className="px-6 py-4 text-slate-900 dark:text-slate-100 text-sm font-semibold uppercase tracking-wider text-center">Habilitar</th>
                                                 <th className="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm font-semibold uppercase tracking-wider text-right">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                                            <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-600/20 flex items-center justify-center text-blue-600 dark:text-blue-500 font-bold text-sm">JS</div>
-                                                        <span className="text-slate-900 dark:text-slate-100 text-sm font-medium">João Silva</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm">joao.silva@fiemg.com.br</td>
-                                                <td className="px-6 py-4">
-                                                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30">Administrador</span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex justify-center">
-                                                        <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input type="checkbox" className="sr-only peer" defaultChecked />
-                                                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                                        </label>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button className="text-slate-400 hover:text-blue-500 transition-colors p-1" title="Editar">
-                                                            <Edit2 className="w-4 h-4" />
-                                                        </button>
-                                                        <button className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Excluir">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-500 font-bold text-sm">MS</div>
-                                                        <span className="text-slate-900 dark:text-slate-100 text-sm font-medium">Maria Souza</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm">maria.souza@fiemg.com.br</td>
-                                                <td className="px-6 py-4">
-                                                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">Viewer</span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex justify-center">
-                                                        <label className="relative inline-flex items-center cursor-pointer">
-                                                            <input type="checkbox" className="sr-only peer" defaultChecked />
-                                                            <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                                                        </label>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        <button className="text-slate-400 hover:text-blue-500 transition-colors p-1" title="Editar">
-                                                            <Edit2 className="w-4 h-4" />
-                                                        </button>
-                                                        <button className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Excluir">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                            {isLoading ? (
+                                                <tr>
+                                                    <td colSpan="5" className="p-8 text-center text-slate-500">
+                                                        <Loader2 className="w-6 h-6 animate-spin mx-auto text-blue-500" />
+                                                        <p className="mt-2 text-sm">Carregando usuários...</p>
+                                                    </td>
+                                                </tr>
+                                            ) : filteredUsers.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="5" className="p-8 text-center text-slate-500 text-sm">Nenhum usuário encontrado.</td>
+                                                </tr>
+                                            ) : (
+                                                filteredUsers.map(u => (
+                                                    <tr key={u.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors group">
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-600/20 flex items-center justify-center text-blue-600 dark:text-blue-500 font-bold text-sm">
+                                                                    {u.avatarInitials}
+                                                                </div>
+                                                                <span className="text-slate-900 dark:text-slate-100 text-sm font-medium">{u.name}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm">{u.email}</td>
+                                                        <td className="px-6 py-4">
+                                                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.role === 'Administrador'
+                                                                    ? 'bg-blue-100 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
+                                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                                                                }`}>
+                                                                {u.role}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex justify-center">
+                                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="sr-only peer"
+                                                                        checked={u.is_active}
+                                                                        onChange={() => handleToggleStatus(u.id, u.is_active)}
+                                                                    />
+                                                                    <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                                                </label>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button className="text-slate-400 hover:text-blue-500 transition-colors p-1" title="Editar">
+                                                                    <Edit2 className="w-4 h-4" />
+                                                                </button>
+                                                                <button className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Excluir">
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
 
                                 <div className="flex items-center justify-between p-6 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#0a0c10]">
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Mostrando <span className="text-slate-900 dark:text-slate-100">1-2</span> de <span className="text-slate-900 dark:text-slate-100">2</span> usuários</p>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Mostrando <span className="text-slate-900 dark:text-slate-100">{filteredUsers.length > 0 ? 1 : 0}-{filteredUsers.length}</span> de <span className="text-slate-900 dark:text-slate-100">{filteredUsers.length}</span> usuários</p>
                                     <div className="flex items-center gap-2">
                                         <button className="flex w-9 h-9 items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800 transition-colors disabled:opacity-50" disabled>
                                             <ChevronLeft className="w-4 h-4" />
@@ -165,7 +259,7 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                 {/* Sub-Modal para Adicionar Usuário */}
                 <AnimatePresence>
                     {isAddUserModalOpen && (
-                        <div className="fixed inset-0 bg-[#0a0c10]/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                        <div className="fixed inset-0 bg-[#0a0c10]/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
@@ -184,17 +278,33 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                                 <div className="p-6 flex flex-col gap-4">
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Nome Completo</label>
-                                        <input type="text" className="w-full bg-slate-50 dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-500 text-sm" placeholder="Ex: Rodrigo Mota" />
+                                        <input
+                                            value={newUserName}
+                                            onChange={e => setNewUserName(e.target.value)}
+                                            type="text"
+                                            className="w-full bg-slate-50 dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-500 text-sm"
+                                            placeholder="Ex: Rodrigo Mota"
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">E-mail Corporativo</label>
-                                        <input type="email" className="w-full bg-slate-50 dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-500 text-sm" placeholder="usuario@fiemg.com.br" />
+                                        <input
+                                            value={newUserEmail}
+                                            onChange={e => setNewUserEmail(e.target.value)}
+                                            type="email"
+                                            className="w-full bg-slate-50 dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-500 text-sm"
+                                            placeholder="usuario@fiemg.com.br"
+                                        />
                                     </div>
                                     <div className="flex flex-col gap-1.5">
                                         <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Perfil de Acesso</label>
-                                        <select className="w-full bg-slate-50 dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm">
-                                            <option>Viewer</option>
-                                            <option>Administrador</option>
+                                        <select
+                                            value={newUserRole}
+                                            onChange={e => setNewUserRole(e.target.value)}
+                                            className="w-full bg-slate-50 dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 rounded-lg px-4 py-2.5 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                                        >
+                                            <option value="Viewer">Viewer</option>
+                                            <option value="Administrador">Administrador</option>
                                         </select>
                                     </div>
                                 </div>
@@ -205,8 +315,13 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                                     >
                                         Cancelar
                                     </button>
-                                    <button className="px-6 py-2 text-sm font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-sm">
-                                        Criar Conta
+                                    <button
+                                        onClick={handleAddUser}
+                                        disabled={isCreating}
+                                        className="px-6 py-2 text-sm flex items-center gap-2 font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-sm disabled:opacity-50"
+                                    >
+                                        {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                        {isCreating ? 'Criando...' : 'Criar Conta'}
                                     </button>
                                 </div>
                             </motion.div>
