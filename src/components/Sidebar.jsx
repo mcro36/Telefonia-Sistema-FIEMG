@@ -5,14 +5,15 @@ import {
     Phone,
     ListOrdered,
     Bot,
-    History,
-    BarChart3,
     LogOut,
-    ChevronRight
+    ChevronRight,
+    Briefcase,
+    ShieldCheck
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { supabase } from '../lib/supabase.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 function cn(...inputs) {
     return twMerge(clsx(inputs));
@@ -20,15 +21,17 @@ function cn(...inputs) {
 
 const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'gerenciamento', label: 'Controle de Acessos', icon: ShieldCheck, isAction: true },
     { id: 'units', label: 'Unidades', icon: Building2 },
     { id: 'lines', label: 'Linhas', icon: ListOrdered },
     { id: 'extensions', label: 'Ramais', icon: Phone },
     { id: 'ura', label: 'URA', icon: Bot },
-    { id: 'history', label: 'Histórico', icon: History },
-    { id: 'charts', label: 'Gráficos', icon: BarChart3 },
+    { id: 'projects', label: 'Projetos', icon: Briefcase },
 ];
 
-export function Sidebar({ activeTab, setActiveTab }) {
+export function Sidebar({ activeTab, setActiveTab, onOpenGerenciamento }) {
+    const { hasRole } = useAuth();
+
     return (
         <aside className="w-64 bg-white dark:bg-[#111621] border-r border-slate-200 dark:border-slate-800 flex flex-col h-screen shrink-0 transition-colors duration-300">
             <div className="p-6 flex items-center gap-3">
@@ -37,7 +40,9 @@ export function Sidebar({ activeTab, setActiveTab }) {
                 </div>
                 <div>
                     <h1 className="text-slate-900 dark:text-white text-base font-bold leading-tight">Telefonia Sistema FIEMG</h1>
-                    <p className="text-slate-500 dark:text-slate-400 text-xs">Admin Console</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-xs">
+                        {activeTab === 'projects' ? 'Gerenciamento de Projetos' : 'Admin Console'}
+                    </p>
                 </div>
             </div>
 
@@ -48,7 +53,17 @@ export function Sidebar({ activeTab, setActiveTab }) {
                     return (
                         <button
                             key={item.id}
-                            onClick={() => setActiveTab(item.id)}
+                            onClick={() => {
+                                if (item.isAction) {
+                                    if (hasRole('Administrador')) {
+                                        onOpenGerenciamento();
+                                    } else {
+                                        alert("Acesso Negado: Seu perfil atual não tem permissão de Administrador!");
+                                    }
+                                } else {
+                                    setActiveTab(item.id);
+                                }
+                            }}
                             className={cn(
                                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group",
                                 isActive
@@ -56,15 +71,15 @@ export function Sidebar({ activeTab, setActiveTab }) {
                                     : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400"
                             )}
                         >
-                            <Icon className="w-5 h-5" />
-                            <span className="text-sm font-medium">{item.label}</span>
+                            <Icon className={cn("w-5 h-5", item.isAction && !hasRole('Administrador') ? "opacity-50" : "")} />
+                            <span className={cn("text-sm font-medium", item.isAction && !hasRole('Administrador') ? "opacity-50" : "")}>{item.label}</span>
                             {isActive && <ChevronRight className="ml-auto w-4 h-4 opacity-50" />}
                         </button>
                     );
                 })}
             </nav>
 
-            <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
                 <button
                     onClick={() => supabase.auth.signOut()}
                     className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-500 dark:hover:text-red-400 transition-all duration-200 group"

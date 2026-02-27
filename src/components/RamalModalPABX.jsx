@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ModalWrapper, ModalFooter } from './ui/ModalWrapper.jsx';
+import { FormField, FormInput, FormSelect, FormSearchableSelect } from './ui/FormField.jsx';
+import { useDependencies } from '../hooks/useDependencies.js';
 
 export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
     const [formData, setFormData] = useState({
@@ -10,15 +12,33 @@ export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
         setor: '',
         ddr: '',
         ura: '',
+        recursoPabxId: '',
         blocoVp: '',
         parPorta: '',
+        pen: '',
         tipoRamal: 'analogico',
         observacao: ''
     });
 
-    // Reset or populate state when modal opens
-    React.useEffect(() => {
+    const [errors, setErrors] = useState({ nome: false, numero: false, recursoPabxId: false, tipoRamal: false });
+
+    const { dependencies, isLoading } = useDependencies([
+        { tableName: 'unidades', columns: 'id, nome, "faixaRamais"', order: { column: 'nome' } },
+        { tableName: 'linhas', columns: 'id, numero', order: { column: 'numero' } },
+        { tableName: 'uras', columns: 'id, nome', order: { column: 'nome' } },
+        { tableName: 'recursos_pabx', columns: '*' },
+        { tableName: 'ramais', columns: 'id, numero, "recursoPabxId"' }
+    ], isOpen);
+
+    const unidades = dependencies.unidades || [];
+    const linhas = dependencies.linhas || [];
+    const uras = dependencies.uras || [];
+    const recursos = dependencies.recursos_pabx || [];
+    const ramaisExistentes = dependencies.ramais || [];
+
+    useEffect(() => {
         if (isOpen) {
+            setErrors({ nome: false, numero: false, recursoPabxId: false, tipoRamal: false });
             if (ramalToEdit) {
                 setFormData(ramalToEdit);
             } else {
@@ -30,8 +50,10 @@ export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
                     setor: '',
                     ddr: '',
                     ura: '',
+                    recursoPabxId: '',
                     blocoVp: '',
                     parPorta: '',
+                    pen: '',
                     tipoRamal: 'analogico',
                     observacao: ''
                 });
@@ -39,306 +61,298 @@ export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
         }
     }, [isOpen, ramalToEdit]);
 
-    function handleLocalSave(e) {
-        e.preventDefault();
-        // Since we are creating from template, minimal validation:
-        if (!formData.nome || !formData.numero) {
-            alert("Nome e Ramal são obrigatórios.");
+    // Opções de recursos filtrando os que já estão em uso (exceto o próprio do ramal em edição)
+    const resourceOptions = useMemo(() => {
+        const usedResourceIds = ramaisExistentes
+            .filter(r => r.id !== (ramalToEdit?.id))
+            .map(r => r.recursoPabxId)
+            .filter(Boolean);
+
+        return recursos.map(rec => {
+            const bloco = rec.bloco?.toString() || '';
+            let prefix = '';
+
+            if (['1', '2', '3', '4', '5'].includes(bloco)) {
+                prefix = 'AF_';
+            } else if (['J', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V'].includes(bloco.toUpperCase())) {
+                prefix = 'RBA_';
+            }
+
+            const label = `${prefix}B${rec.bloco}_P${rec.porta}_${(rec.tecnologia_padrao || 'Analogico').toUpperCase()}`;
+
+            return {
+                value: rec.id,
+                label: label,
+                isUsed: usedResourceIds.includes(rec.id)
+            };
+        }).sort((a, b) => a.label.localeCompare(b.label));
+    }, [recursos, ramaisExistentes, ramalToEdit]);
+
+    function handleResourceChange(resourceId) {
+        const rec = recursos.find(r => r.id === resourceId);
+        if (rec) {
+            setFormData({
+                ...formData,
+                recursoPabxId: resourceId,
+                blocoVp: rec.bloco,
+                parPorta: rec.porta,
+                pen: rec.pen,
+                tipoRamal: rec.tecnologia_padrao?.toLowerCase() === 'digital' ? 'digital' : 'analogico'
+            });
+        } else {
+            setFormData({
+                ...formData,
+                recursoPabxId: '',
+                blocoVp: '',
+                parPorta: '',
+                pen: ''
+            });
+        }
+    }
+
+    function handleLocalSave() {
+        const newErrors = { nome: false, numero: false, recursoPabxId: false, tipoRamal: false };
+        let hasError = false;
+
+        if (!formData.nome || formData.nome.trim() === '') {
+            newErrors.nome = true;
+            hasError = true;
+        }
+
+        if (!formData.numero || formData.numero.trim() === '') {
+            newErrors.numero = true;
+            hasError = true;
+        }
+
+        if (!formData.recursoPabxId) {
+            newErrors.recursoPabxId = true;
+            hasError = true;
+        }
+
+        if (!formData.tipoRamal || formData.tipoRamal.trim() === '') {
+            newErrors.tipoRamal = true;
+            hasError = true;
+        }
+
+        setErrors(newErrors);
+        if (hasError) return;
+
+        // VALIDAÇÕES DE RAMAL (idêntico ao SIP)
+
+        // 1. Exatamente 4 dígitos numéricos
+        if (!/^\d{4}$/.test(formData.numero)) {
+            alert('O ramal deve conter exatamente 4 dígitos numéricos (ex: 1020).');
+            setErrors({ ...newErrors, numero: true });
             return;
         }
 
-        // Pass the payload up
-        onSave({
-            ...formData,
-            tipo: 'PABX' // Distinguish from SIP
-        });
+        // 2. Verificar duplicidade
+        const currentId = ramalToEdit ? ramalToEdit.id : undefined;
+        const ramalExists = ramaisExistentes.some(r => r.numero === formData.numero && r.id !== currentId);
+
+        if (ramalExists) {
+            alert(`O ramal ${formData.numero} já está cadastrado no sistema! Por favor, escolha outro número.`);
+            setErrors({ ...newErrors, numero: true });
+            return;
+        }
+
+        // 3. Verificar faixa da unidade
+        if (formData.unidadeId) {
+            const unidadeSelecionada = unidades.find(u => u.id === formData.unidadeId);
+            if (unidadeSelecionada && unidadeSelecionada.faixaRamais) {
+                const [inicioStr, fimStr] = unidadeSelecionada.faixaRamais.split(' - ');
+                const inicio = parseInt(inicioStr, 10);
+                const fim = parseInt(fimStr, 10);
+                const numeroRamal = parseInt(formData.numero, 10);
+
+                if (!isNaN(inicio) && !isNaN(fim) && (numeroRamal < inicio || numeroRamal > fim)) {
+                    alert(`Não permitido: O ramal ${numeroRamal} está fora da "Faixa de Ramais" permitida na unidade ${unidadeSelecionada.nome} (${unidadeSelecionada.faixaRamais}).`);
+                    setErrors({ ...newErrors, numero: true });
+                    return;
+                }
+            }
+        }
+
+        onSave({ ...formData, tipo: 'PABX' });
     }
 
-    if (!isOpen) return null;
-
     return (
-        <AnimatePresence>
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={onClose}
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+        <ModalWrapper
+            isOpen={isOpen}
+            onClose={onClose}
+            title={ramalToEdit ? 'Editar Ramal PABX' : 'Cadastrar Novo Ramal PABX'}
+            subtitle={ramalToEdit ? 'Atualize os dados técnicos e roteamento.' : 'Adicione um novo ramal analógico ou digital.'}
+            icon="add_call"
+            maxWidth="max-w-[800px]"
+            footer={
+                <ModalFooter
+                    onClose={onClose}
+                    onSave={handleLocalSave}
+                    saveText={ramalToEdit ? 'Atualizar Ramal' : 'Salvar Ramal'}
                 />
-
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="relative w-full max-w-[800px] bg-white dark:bg-surface-dark rounded-xl shadow-2xl border border-slate-200 dark:border-border-dark flex flex-col max-h-[90vh] overflow-hidden"
-                >
-                    <div className="px-6 py-5 border-b border-slate-200 dark:border-border-dark flex items-center justify-between bg-white dark:bg-surface-dark sticky top-0 z-10 transition-colors">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-primary/10 p-2 rounded-lg">
-                                <span className="material-symbols-outlined text-primary">add_call</span>
-                            </div>
-                            <h2 className="text-slate-900 dark:text-slate-100 text-xl font-bold leading-tight">
-                                {ramalToEdit ? 'Editar Ramal PABX' : 'Cadastrar Novo Ramal PABX'}
-                            </h2>
-                        </div>
-                        <button onClick={onClose} className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800">
-                            <span className="material-symbols-outlined">close</span>
-                        </button>
+            }
+        >
+            <div className="space-y-8">
+                {/* Identificação */}
+                <div className="space-y-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="material-symbols-outlined text-blue-600 text-[20px]">badge</span>
+                        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Identificação</h3>
                     </div>
 
-                    <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-background-light dark:bg-[#111621] transition-colors">
-                        <form className="space-y-8" onSubmit={handleLocalSave}>
-                            {/* Identificação Group */}
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <span className="material-symbols-outlined text-primary text-sm">badge</span>
-                                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Identificação</h3>
-                                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField label="Nome do ramal" required>
+                            <FormInput
+                                placeholder="Ex: Recepção Central"
+                                value={formData.nome}
+                                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                                error={errors.nome}
+                            />
+                        </FormField>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                            Nome do ramal <span className="text-red-500">*</span>
-                                        </label>
-                                        <div className="relative group">
-                                            <input
-                                                className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm h-11 pl-4 transition-all"
-                                                placeholder="Ex: Recepção Central"
-                                                type="text"
-                                                value={formData.nome}
-                                                onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
+                        <div className="flex gap-4">
+                            <FormField label="Ramal" required className="flex-1">
+                                <FormInput
+                                    placeholder="Ex: 101"
+                                    value={formData.numero}
+                                    onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                                    error={errors.numero}
+                                />
+                            </FormField>
 
-                                    <div className="flex gap-4">
-                                        <div className="space-y-2 flex-1">
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                                Ramal <span className="text-red-500">*</span>
-                                            </label>
-                                            <input
-                                                className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm h-11 pl-4 transition-all"
-                                                placeholder="Ex: 101"
-                                                type="text"
-                                                value={formData.numero}
-                                                onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2 flex flex-col justify-end pb-1.5">
-                                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                                Habilitado
-                                            </label>
-                                            <label className="inline-flex items-center cursor-pointer">
-                                                <input
-                                                    checked={formData.status === 'Ativo'}
-                                                    onChange={(e) => setFormData({ ...formData, status: e.target.checked ? 'Ativo' : 'Inativo' })}
-                                                    className="sr-only peer"
-                                                    type="checkbox"
-                                                />
-                                                <div className="relative w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary/50 dark:peer-focus:ring-primary/30 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-primary"></div>
-                                                <span className="ms-3 text-sm font-medium text-slate-700 dark:text-slate-300">Sim</span>
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                            Unidade
-                                        </label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                                                <span className="material-symbols-outlined text-[20px]">domain</span>
-                                            </div>
-                                            <select
-                                                className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm h-11 pl-10 pr-10 appearance-none transition-all"
-                                                value={formData.unidadeId}
-                                                onChange={(e) => setFormData({ ...formData, unidadeId: e.target.value })}
-                                            >
-                                                <option disabled value="">Selecione a unidade</option>
-                                                <option value="hq">Matriz - São Paulo</option>
-                                                <option value="bh">Filial - Belo Horizonte</option>
-                                                <option value="rj">Filial - Rio de Janeiro</option>
-                                            </select>
-                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-                                                <span className="material-symbols-outlined">expand_more</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                            Setor
-                                        </label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                                                <span className="material-symbols-outlined text-[20px]">groups</span>
-                                            </div>
-                                            <input
-                                                className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm h-11 pl-10 transition-all"
-                                                placeholder="Ex: Comercial"
-                                                type="text"
-                                                value={formData.setor}
-                                                onChange={(e) => setFormData({ ...formData, setor: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="h-px bg-slate-200 dark:bg-border-dark"></div>
-
-                            {/* Configuração & Roteamento Group */}
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <span className="material-symbols-outlined text-primary text-sm">settings_phone</span>
-                                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Configuração & Roteamento</h3>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                            Número Principal (DDR)
-                                        </label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                                                <span className="material-symbols-outlined text-[20px]">call</span>
-                                            </div>
-                                            <select
-                                                className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm h-11 pl-10 pr-10 appearance-none transition-all"
-                                                value={formData.ddr}
-                                                onChange={(e) => setFormData({ ...formData, ddr: e.target.value })}
-                                            >
-                                                <option disabled value="">Vincular número</option>
-                                                <option value="1">(11) 3040-5000</option>
-                                                <option value="2">(11) 3040-5001</option>
-                                                <option value="3">(11) 3040-5002</option>
-                                            </select>
-                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-                                                <span className="material-symbols-outlined">expand_more</span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                            URA
-                                        </label>
-                                        <div className="relative">
-                                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                                                <span className="material-symbols-outlined text-[20px]">alt_route</span>
-                                            </div>
-                                            <select
-                                                className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm h-11 pl-10 pr-10 appearance-none transition-all"
-                                                value={formData.ura}
-                                                onChange={(e) => setFormData({ ...formData, ura: e.target.value })}
-                                            >
-                                                <option disabled value="">Selecione a URA</option>
-                                                <option value="main">Atendimento Principal</option>
-                                                <option value="suporte">Suporte Técnico</option>
-                                                <option value="vendas">Comercial</option>
-                                            </select>
-                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-                                                <span className="material-symbols-outlined">expand_more</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="h-px bg-slate-200 dark:bg-border-dark"></div>
-
-                            {/* Dados Técnicos Group */}
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <span className="material-symbols-outlined text-primary text-sm">router</span>
-                                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Dados Técnicos</h3>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                            Bloco / VP
-                                        </label>
-                                        <input
-                                            className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm h-11 pl-4 transition-all"
-                                            placeholder="Ex: A-12"
-                                            type="text"
-                                            value={formData.blocoVp}
-                                            onChange={(e) => setFormData({ ...formData, blocoVp: e.target.value })}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                            Par / Porta
-                                        </label>
-                                        <input
-                                            className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm h-11 pl-4 transition-all"
-                                            placeholder="Ex: 05"
-                                            type="text"
-                                            value={formData.parPorta}
-                                            onChange={(e) => setFormData({ ...formData, parPorta: e.target.value })}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                            Tipo de ramal
-                                        </label>
-                                        <div className="relative">
-                                            <select
-                                                className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm h-11 pl-4 pr-10 appearance-none transition-all"
-                                                value={formData.tipoRamal}
-                                                onChange={(e) => setFormData({ ...formData, tipoRamal: e.target.value })}
-                                            >
-                                                <option value="analogico">Analógico</option>
-                                                <option value="digital">Digital</option>
-                                            </select>
-                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-500">
-                                                <span className="material-symbols-outlined">expand_more</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2 pb-6">
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                                        Observação
-                                    </label>
-                                    <textarea
-                                        className="block w-full rounded-lg border border-slate-300 dark:border-border-dark bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white focus:border-primary focus:ring-primary sm:text-sm min-h-[100px] p-3 resize-y transition-all"
-                                        placeholder="Informações adicionais sobre este ramal..."
-                                        value={formData.observacao}
-                                        onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
+                            <div className="flex flex-col justify-end pb-2">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    Habilitado
+                                </label>
+                                <label className="inline-flex items-center cursor-pointer">
+                                    <input
+                                        checked={formData.status === 'Ativo'}
+                                        onChange={(e) => setFormData({ ...formData, status: e.target.checked ? 'Ativo' : 'Inativo' })}
+                                        className="sr-only peer"
+                                        type="checkbox"
                                     />
-                                </div>
+                                    <div className="relative w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-600/50 rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-blue-600"></div>
+                                    <span className="ms-3 text-sm font-medium text-slate-700 dark:text-slate-300">Sim</span>
+                                </label>
                             </div>
-                        </form>
+                        </div>
                     </div>
 
-                    <div className="px-6 py-4 bg-slate-50 dark:bg-[#111621]/50 border-t border-slate-200 dark:border-border-dark flex items-center justify-end gap-3 sticky bottom-0 z-10 transition-colors">
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors bg-white dark:bg-surface-dark border border-slate-300 dark:border-border-dark rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
-                            type="button"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            onClick={handleLocalSave}
-                            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark focus:ring-4 focus:ring-blue-300 dark:focus:ring-blue-900 transition-all shadow-lg shadow-primary/30"
-                            type="button"
-                        >
-                            <span className="material-symbols-outlined text-[18px]">save</span>
-                            {ramalToEdit ? 'Atualizar Ramal' : 'Salvar Ramal'}
-                        </button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField label="Unidade">
+                            <FormSearchableSelect
+                                id="unidades-pabx"
+                                icon="domain"
+                                placeholder={isLoading ? "Carregando unidades..." : "Selecione a unidade"}
+                                value={formData.unidadeId}
+                                onChange={(val) => setFormData({ ...formData, unidadeId: val })}
+                                options={unidades.map(u => ({ value: u.id, label: u.nome }))}
+                            />
+                        </FormField>
+
+                        <FormField label="Setor">
+                            <FormInput
+                                icon="groups"
+                                placeholder="Ex: Comercial"
+                                value={formData.setor}
+                                onChange={(e) => setFormData({ ...formData, setor: e.target.value })}
+                            />
+                        </FormField>
                     </div>
-                </motion.div>
+                </div>
+
+                <div className="h-px bg-slate-200 dark:bg-slate-800"></div>
+
+                {/* Configuração & Roteamento */}
+                <div className="space-y-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="material-symbols-outlined text-blue-600 text-[20px]">settings_phone</span>
+                        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Configuração & Roteamento</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <FormField label="Número Principal (DDR)">
+                            <FormSearchableSelect
+                                id="linhas-pabx"
+                                icon="call"
+                                placeholder={isLoading ? "Carregando..." : "Vincular número"}
+                                value={formData.ddr}
+                                onChange={(val) => setFormData({ ...formData, ddr: val })}
+                                options={linhas.map(l => ({ value: l.id, label: l.numero }))}
+                            />
+                        </FormField>
+
+                        <FormField label="URA">
+                            <FormSearchableSelect
+                                id="uras-pabx"
+                                icon="alt_route"
+                                placeholder={isLoading ? "Carregando..." : "Selecione a URA"}
+                                value={formData.ura}
+                                onChange={(val) => setFormData({ ...formData, ura: val })}
+                                options={uras.map(u => ({ value: u.id, label: u.nome }))}
+                            />
+                        </FormField>
+                    </div>
+                </div>
+
+                <div className="h-px bg-slate-200 dark:bg-slate-800"></div>
+
+                {/* Dados Técnicos */}
+                <div className="space-y-6">
+                    <div className="flex items-center gap-2 mb-4">
+                        <span className="material-symbols-outlined text-blue-600 text-[20px]">router</span>
+                        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider">Dados Técnicos</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6">
+                        <FormField label="Bloco e porta" required>
+                            <FormSearchableSelect
+                                id="recursos-pabx"
+                                icon="router"
+                                placeholder={isLoading ? "Carregando inventário..." : "Selecione a porta (B_P_TECNOLOGIA)"}
+                                value={formData.recursoPabxId}
+                                onChange={handleResourceChange}
+                                options={resourceOptions.map(opt => ({
+                                    ...opt,
+                                    disabled: opt.isUsed,
+                                    label: opt.isUsed ? `${opt.label} (Em uso)` : opt.label
+                                }))}
+                                error={errors.recursoPabxId}
+                            />
+                        </FormField>
+                    </div>
+
+                    {formData.recursoPabxId && (
+                        <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                            <div>
+                                <span className="block text-[10px] uppercase font-bold text-blue-600/70 dark:text-blue-400/70 mb-1">Bloco</span>
+                                <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">B{formData.blocoVp}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[10px] uppercase font-bold text-blue-600/70 dark:text-blue-400/70 mb-1">Porta</span>
+                                <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">P{formData.parPorta}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[10px] uppercase font-bold text-blue-600/70 dark:text-blue-400/70 mb-1">PEN</span>
+                                <span className="text-sm font-semibold text-blue-900 dark:text-blue-100">{formData.pen}</span>
+                            </div>
+                            <div>
+                                <span className="block text-[10px] uppercase font-bold text-blue-600/70 dark:text-blue-400/70 mb-1">Tipo de ramal</span>
+                                <span className="text-sm font-semibold text-blue-900 dark:text-blue-100 uppercase">{formData.tipoRamal}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <FormField label="Observação">
+                    <textarea
+                        className="block w-full rounded-lg border border-slate-300 dark:border-slate-800 bg-slate-50 dark:bg-[#111318] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 sm:text-sm min-h-[100px] p-4 resize-y transition-all shadow-sm dark:shadow-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                        placeholder="Informações adicionais sobre este ramal..."
+                        value={formData.observacao}
+                        onChange={(e) => setFormData({ ...formData, observacao: e.target.value })}
+                    />
+                </FormField>
             </div>
-        </AnimatePresence>
+        </ModalWrapper>
     );
 }

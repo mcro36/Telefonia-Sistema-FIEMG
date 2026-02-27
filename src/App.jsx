@@ -1,17 +1,22 @@
-import React, { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar.jsx';
 import { DashboardView } from './components/DashboardView.jsx';
 import { UnidadeView } from './components/UnidadeView.jsx';
 import { LinesView } from './components/LinhasView.jsx';
 import { ExtensionsView } from './components/RamaisView.jsx';
 import { Bell, Search, Plus, PhoneCall, ListOrdered, Bot, Moon, Sun } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from './lib/supabase.js';
-import { useEffect } from 'react';
 import { useTheme } from './hooks/useTheme.js';
+import { UraView } from './components/UraView.jsx';
+import { ProjetoView } from './components/ProjetoView.jsx';
+import { GerenciamentoContaModal } from './components/GerenciamentoContaModal.jsx';
+import { useAuth } from './contexts/AuthContext.jsx';
+import { User, Settings, ShieldCheck, LogOut, ChevronRight } from 'lucide-react';
 
 export default function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [customTitle, setCustomTitle] = useState('');
     const [session, setSession] = useState(null);
     const [loading, setLoading] = useState(true);
     const [email, setEmail] = useState('');
@@ -19,6 +24,23 @@ export default function App() {
     const [authError, setAuthError] = useState(null);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const { theme, toggleTheme } = useTheme();
+    const { user: roleUser, hasRole } = useAuth(); // Importa nosso User mockado da regra RBAC
+    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const [isGerenciamentoModalOpen, setIsGerenciamentoModalOpen] = useState(false);
+    const userMenuRef = useRef(null);
+
+    // Fechar menu de usuário ao clicar fora
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+                setIsUserMenuOpen(false);
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
 
     useEffect(() => {
         // Obter sessão inicial
@@ -140,11 +162,15 @@ export default function App() {
 
     return (
         <div className="flex h-screen bg-slate-50 dark:bg-[#0a0c10] text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-300">
-            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+            <Sidebar
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onOpenGerenciamento={() => setIsGerenciamentoModalOpen(true)}
+            />
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
                 {/* Header */}
-                <header className="h-16 flex items-center justify-between px-8 bg-white dark:bg-[#0a0c10] border-b border-slate-200 dark:border-slate-800 shrink-0 z-10 transition-colors duration-300">
+                <header className="h-16 flex items-center justify-between px-8 bg-white dark:bg-[#0a0c10] border-b border-slate-200 dark:border-slate-800 shrink-0 z-50 transition-colors duration-300">
                     <div className="flex items-center gap-4">
                         <h2 className="text-xl font-semibold text-slate-900 dark:text-white tracking-tight">
                             {activeTab === 'dashboard' ? 'Dashboard Geral' :
@@ -152,7 +178,8 @@ export default function App() {
                                     activeTab === 'lines' ? 'Gerenciamento de Linhas' :
                                         activeTab === 'extensions' ? 'Gerenciamento de Ramais' :
                                             activeTab === 'ura' ? 'Gerenciamento de URA' :
-                                                'Console Administrativo'}
+                                                activeTab === 'projects' ? (customTitle || 'Gerenciamento de Projetos') :
+                                                    'Console Administrativo'}
                         </h2>
                     </div>
                     <div className="flex items-center gap-4">
@@ -168,21 +195,71 @@ export default function App() {
                             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-[#0a0c10]"></span>
                         </button>
                         <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>
-                        <div className="flex items-center gap-3">
-                            <div className="text-right hidden sm:block">
-                                <p className="text-sm font-medium text-slate-900 dark:text-white leading-none">{session.user.email.split('@')[0]}</p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Usuário Autenticado</p>
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-600/20 flex items-center justify-center text-blue-600 dark:text-blue-500 font-bold text-xs uppercase">
-                                {session.user.email[0]}
-                            </div>
+                        <div className="relative" ref={userMenuRef}>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    console.log('Avatar Clicado! Anterar Menu Para:', !isUserMenuOpen);
+                                    setIsUserMenuOpen(prev => !prev);
+                                }}
+                                className="flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-[#111621] p-1.5 rounded-lg transition-colors cursor-pointer"
+                            >
+                                <div className="text-right hidden sm:block">
+                                    <p className="text-sm font-medium text-slate-900 dark:text-white leading-none">{roleUser?.name || session.user.email.split('@')[0]}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{roleUser?.role || 'Usuário Autenticado'}</p>
+                                </div>
+                                <div className="w-9 h-9 border border-blue-600/30 rounded-full bg-blue-100 dark:bg-[#151c2e] flex items-center justify-center text-blue-600 dark:text-blue-500 font-bold text-sm uppercase shadow-inner">
+                                    {roleUser?.avatarInitials || session.user.email[0]}
+                                </div>
+                            </button>
+
+                            {/* Dropdown Menu */}
+                            <AnimatePresence>
+                                {isUserMenuOpen && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        transition={{ duration: 0.15 }}
+                                        style={{ zIndex: 99999 }}
+                                        className="absolute right-0 top-14 w-64 bg-white dark:bg-[#151a23] rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden origin-top-right flex flex-col pointer-events-auto"
+                                    >
+                                        <div className="p-4 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-transparent">
+                                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Conta Logada</p>
+                                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{roleUser?.name}</p>
+                                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate mt-0.5">{roleUser?.email}</p>
+                                        </div>
+
+                                        <div className="p-2 flex flex-col gap-0.5">
+                                            <button className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left">
+                                                <User className="w-4 h-4 text-slate-400" />
+                                                Meu Perfil
+                                            </button>
+                                            <button className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left">
+                                                <Settings className="w-4 h-4 text-slate-400" />
+                                                Configurações
+                                            </button>
+                                        </div>
+
+                                        <div className="p-2 border-t border-slate-100 dark:border-slate-800/60">
+                                            <button
+                                                onClick={async () => { await supabase.auth.signOut(); }}
+                                                className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors text-left"
+                                            >
+                                                <LogOut className="w-4 h-4" />
+                                                Sair do Sistema
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </div>
                 </header>
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                    <div className="max-w-7xl mx-auto">
+                <div className="flex-1 overflow-y-auto px-8 pt-8 pb-0 custom-scrollbar flex flex-col">
+                    <div className="flex-1 w-full max-w-7xl mx-auto">
                         <AnimatePresence mode="wait">
                             <motion.div
                                 key={activeTab}
@@ -195,21 +272,22 @@ export default function App() {
                                 {activeTab === 'units' && <UnidadeView />}
                                 {activeTab === 'lines' && <LinesView />}
                                 {activeTab === 'extensions' && <ExtensionsView />}
-                                {activeTab === 'ura' && (
-                                    <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500">
-                                        <Bot className="w-16 h-16 mb-4 opacity-20" />
-                                        <p>Módulo de URA em desenvolvimento...</p>
-                                    </div>
-                                )}
+                                {activeTab === 'ura' && <UraView />}
+                                {activeTab === 'projects' && <ProjetoView setPageTitle={setCustomTitle} />}
                             </motion.div>
                         </AnimatePresence>
                     </div>
 
-                    <footer className="mt-12 pt-8 border-t border-slate-800 text-center text-xs text-slate-500 pb-8">
+                    <footer className="mt-8 pt-4 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 pb-0 shrink-0">
                         <p>© 2024 Gestão Telefônica Enterprise. Todos os direitos reservados.</p>
                     </footer>
                 </div>
             </main>
+
+            <GerenciamentoContaModal
+                isOpen={isGerenciamentoModalOpen}
+                onClose={() => setIsGerenciamentoModalOpen(false)}
+            />
         </div>
     );
 }

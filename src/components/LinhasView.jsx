@@ -1,85 +1,45 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, Smartphone, Edit2, Trash2, Loader2 } from 'lucide-react';
-import { supabase } from '../lib/supabase.js';
+import React, { useState, useMemo } from 'react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { LinhaModal } from './LinhaModal.jsx';
+import { useSupabaseTable } from '../hooks/useSupabaseTable.js';
+import { PageHeader, ContentContainer } from './ui/PageLayout.jsx';
+import { ProtectedRoute } from './ui/ProtectedRoute.jsx';
+import { exportToPDF } from '../lib/exportUtils.js';
 
 export function LinesView() {
-    const [lines, setLines] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { data: lines, isLoading, saveRecord, deleteRecord, setData: setLines } = useSupabaseTable({
+        tableName: 'linhas',
+        order: { column: 'numero', ascending: true }
+    });
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [linhaToEdit, setLinhaToEdit] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
-    useEffect(() => {
-        fetchLines();
-    }, []);
-
-    async function fetchLines() {
-        setIsLoading(true);
-        try {
-            const { data, error } = await supabase.from('linhas').select('*');
-            if (error) throw error;
-            if (data) setLines(data);
-        } catch (error) {
-            console.error('Error fetching lines:', error);
-            setLines([
-                { id: '1', numero: '(31) 3333-0001', operadora: 'Vivo', unidadeId: '1', status: 'Ativa' },
-                { id: '2', numero: '(31) 3333-0002', operadora: 'Claro', unidadeId: '2', status: 'Ativa' },
-                { id: '3', numero: '(31) 3333-0003', operadora: 'Vivo', unidadeId: '1', status: 'Inativa' },
-                { id: '4', numero: '(31) 3333-0004', operadora: 'Tim', unidadeId: '4', status: 'Ativa' },
-                { id: '5', numero: '(31) 3333-0005', operadora: 'Vivo', unidadeId: '5', status: 'Ativa' },
-                { id: '6', numero: '(31) 3333-0006', operadora: 'Oi', unidadeId: '3', status: 'Manutenção' },
-            ]);
-        } finally {
-            setIsLoading(false);
-        }
-    }
+    const filteredLines = useMemo(() => {
+        if (!searchTerm) return lines;
+        const lowerTerm = searchTerm.toLowerCase();
+        return lines.filter(line =>
+            line.numero?.toLowerCase().includes(lowerTerm) ||
+            line.operadora?.toLowerCase().includes(lowerTerm)
+        );
+    }, [lines, searchTerm]);
 
     async function handleSaveLinha(linhaData) {
-        try {
-            if (linhaData.id) {
-                const { error } = await supabase
-                    .from('linhas')
-                    .update(linhaData)
-                    .eq('id', linhaData.id);
-                if (error) throw error;
-            } else {
-                const { error } = await supabase
-                    .from('linhas')
-                    .insert([linhaData]);
-                if (error) throw error;
-            }
-
-            fetchLines();
+        const result = await saveRecord(linhaData);
+        if (result.success) {
             setIsModalOpen(false);
             setLinhaToEdit(null);
-        } catch (error) {
-            console.error('Error saving linha:', error);
-            // Fallback for demo mode
-            if (linhaData.id) {
-                setLines(lines.map(l => l.id === linhaData.id ? linhaData : l));
-            } else {
-                const newLinha = { ...linhaData, id: Math.random().toString() };
-                setLines([...lines, newLinha]);
-            }
-            setIsModalOpen(false);
-            setLinhaToEdit(null);
+        } else {
+            console.error('Error saving line:', result.error);
         }
     }
 
     async function handleDeleteLinha(id) {
-        if (!window.confirm("Atenção: Tem certeza que deseja excluir esta linha?")) {
-            return;
-        }
-        try {
-            const { error } = await supabase
-                .from('linhas')
-                .delete()
-                .eq('id', id);
+        if (!window.confirm("Atenção: Tem certeza que deseja excluir esta linha?")) return;
 
-            if (error) throw error;
-            fetchLines();
-        } catch (error) {
-            console.error('Error deleting linha:', error);
+        const result = await deleteRecord(id);
+        if (!result.success) {
             setLines(lines.filter(l => l.id !== id));
         }
     }
@@ -94,124 +54,106 @@ export function LinesView() {
         setIsModalOpen(true);
     }
 
+    const handleExport = () => {
+        const head = ['Linha', 'Operadora', 'Status'];
+        const body = filteredLines.map(line => [
+            line.numero || '-',
+            line.operadora || '-',
+            line.status || '-'
+        ]);
+        exportToPDF('Relatório de Linhas', head, body, 'linhas_export.pdf');
+    };
+
     return (
-        <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-            <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2 tracking-tight transition-colors">Gerenciamento de Linhas</h1>
-                    <p className="text-slate-500 dark:text-slate-400 transition-colors">Visualize e gerencie todas as linhas telefônicas cadastradas no sistema.</p>
-                </div>
-                <button
-                    onClick={handleOpenNew}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-5 rounded-lg shadow-sm transition-all flex items-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    Nova Linha
-                </button>
-            </header>
+        <div className="flex flex-col gap-6 h-full animate-in slide-in-from-bottom-4 duration-500">
+            <PageHeader
+                searchPlaceholder="Buscar por número ou operadora..."
+                onSearch={(e) => setSearchTerm(e.target.value)}
+                onExport={handleExport}
+                primaryAction={{
+                    label: 'Nova Linha',
+                    icon: <Plus className="w-4 h-4" />,
+                    onClick: handleOpenNew
+                }}
+            />
 
-            <div className="bg-white dark:bg-[#1c1f26] rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm transition-colors">
-                <div className="flex flex-col md:flex-row gap-4">
-                    <div className="flex-1 relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 w-4 h-4 transition-colors" />
-                        <input
-                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#111621] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 transition-all shadow-sm dark:shadow-none"
-                            placeholder="Buscar por número, operadora ou unidade..."
-                        />
-                    </div>
-                    <div className="flex gap-2">
-                        <select className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-[#111621] text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-blue-500 min-w-[140px] transition-colors shadow-sm dark:shadow-none">
-                            <option value="">Todas Operadoras</option>
-                            <option value="vivo">Vivo</option>
-                            <option value="claro">Claro</option>
-                        </select>
-                        <button className="px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111621] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2 shadow-sm dark:shadow-none">
-                            <Filter className="w-4 h-4" />
-                            <span>Filtros</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white dark:bg-[#1c1f26] rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col min-h-[400px] transition-colors">
-                {isLoading ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-3">
-                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                        <p className="text-sm">Carregando linhas...</p>
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-slate-50 dark:bg-[#111621] border-b border-slate-200 dark:border-slate-800 transition-colors">
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Linha</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Operadora</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200 dark:divide-slate-800 transition-colors">
-                                {lines.map((line) => (
-                                    <tr key={line.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center">
-                                                <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-600/10 flex items-center justify-center text-blue-600 dark:text-blue-500 mr-3 transition-colors">
-                                                    <Smartphone className="w-4 h-4" />
-                                                </div>
-                                                <span className={`font-medium ${line.status === 'Inativa' ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-900 dark:text-white transition-colors'}`}>
-                                                    {line.numero}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
-                        ${line.operadora === 'Vivo' ? 'bg-purple-100 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400' :
-                                                    line.operadora === 'Claro' ? 'bg-red-100 dark:bg-red-500/10 text-red-600 dark:text-red-400' :
-                                                        'bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'}`}>
-                                                {line.operadora}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`h-2 w-2 rounded-full 
-                          ${line.status === 'Ativa' ? 'bg-emerald-500' :
-                                                        line.status === 'Manutenção' ? 'bg-amber-500' :
-                                                            'bg-slate-400 dark:bg-slate-500'}`} />
-                                                <span className="text-sm text-slate-700 dark:text-slate-300 transition-colors">{line.status}</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+            <ContentContainer
+                isLoading={isLoading}
+                loadingMessage="Carregando linhas..."
+                pagination={{ total: filteredLines.length }}
+            >
+                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
+                    <thead className="bg-slate-50 dark:bg-[#111621]">
+                        <tr>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Linha</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Operadora</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                            <th className="relative px-6 py-4">
+                                <span className="sr-only">Ações</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-[#1c1f26]">
+                        {filteredLines.map((line) => (
+                            <tr key={line.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="flex items-center">
+                                        <div className="flex-shrink-0 h-10 w-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 font-bold text-sm mr-4 transition-colors">
+                                            <span className="material-symbols-outlined text-[20px]">phone_iphone</span>
+                                        </div>
+                                        <span className={`font-medium ${line.status === 'Inativa' ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-900 dark:text-white transition-colors'}`}>
+                                            {line.numero}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium 
+                                                ${line.operadora === 'Vivo' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' :
+                                            line.operadora === 'Claro' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
+                                                'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'}`}>
+                                        {line.operadora}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${line.status === 'Ativa' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${line.status === 'Ativa' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                                        {line.status}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <div className="flex items-center justify-end gap-2">
+                                        <ProtectedRoute>
                                             <button
                                                 onClick={() => handleOpenEdit(line)}
-                                                className="text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 transition-colors p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
-                                                <Edit2 className="w-4 h-4" />
+                                                className="p-2 text-slate-400 hover:text-primary dark:hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                                                title="Editar Linha"
+                                            >
+                                                <Pencil className="w-4 h-4" />
                                             </button>
+                                        </ProtectedRoute>
+                                        <ProtectedRoute>
                                             <button
                                                 onClick={() => handleDeleteLinha(line.id)}
-                                                className="text-slate-400 hover:text-red-500 transition-colors p-1 ml-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
+                                                className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                                                title="Excluir Linha"
+                                            >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
-                <div className="bg-slate-50 dark:bg-[#111621] px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between mt-auto transition-colors">
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                        Mostrando <span className="font-medium text-slate-900 dark:text-white">1</span> a <span className="font-medium text-slate-900 dark:text-white">{lines.length}</span> de <span className="font-medium text-slate-900 dark:text-white">{lines.length}</span> resultados
-                    </p>
-                    <div className="flex items-center gap-2">
-                        <button className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors">
-                            Anterior
-                        </button>
-                        <button className="w-9 h-9 flex items-center justify-center rounded-lg bg-blue-600 text-white text-sm font-medium shadow-sm">1</button>
-                        <button className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                            Próximo
-                        </button>
-                    </div>
-                </div>
-            </div>
+                                        </ProtectedRoute>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {filteredLines.length === 0 && (
+                            <tr>
+                                <td colSpan="4" className="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                                    Nenhuma linha encontrada.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </ContentContainer>
 
             <LinhaModal
                 isOpen={isModalOpen}
