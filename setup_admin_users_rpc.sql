@@ -95,7 +95,7 @@ $$ LANGUAGE plpgsql;
 
 -- 4. Função para EDITAR PERFIL E EMAIL DO USUÁRIO
 CREATE OR REPLACE FUNCTION update_user_details(
-  target_user_id uuid,
+  target_user_id text,
   new_email text,
   new_name text,
   new_role text
@@ -106,14 +106,18 @@ SET search_path = public
 AS $$
 DECLARE
   current_meta jsonb;
+  target_uuid uuid;
 BEGIN
+  -- Cast seguro para UUID
+  target_uuid := target_user_id::uuid;
+  
   -- Validação de Segurança
   IF (coalesce((current_setting('request.jwt.claims', true)::jsonb)->'user_metadata'->>'role', '') != 'Administrador') THEN
     RAISE EXCEPTION 'Acesso negado: Perfil de Administrador exigido.';
   END IF;
 
   -- Busca o metadata atual
-  SELECT raw_user_meta_data INTO current_meta FROM auth.users WHERE auth.users.id = target_user_id;
+  SELECT raw_user_meta_data INTO current_meta FROM auth.users WHERE auth.users.id = target_uuid;
   current_meta := coalesce(current_meta, '{}'::jsonb);
 
   -- Modifica o JSON
@@ -126,7 +130,10 @@ BEGIN
   SET 
     email = new_email,
     raw_user_meta_data = current_meta 
-  WHERE auth.users.id = target_user_id;
+  WHERE auth.users.id = target_uuid;
 
 END;
 $$ LANGUAGE plpgsql;
+
+-- 5. Função Extra para Forçar a Atualização do Cache de Schema no PostgREST (Supabase)
+NOTIFY pgrst, 'reload schema';

@@ -42,6 +42,13 @@ export default function App() {
         };
     }, []);
 
+    // Forçar fechamento do menu ao carregar sessão ou trocar de usuário
+    useEffect(() => {
+        if (user) {
+            setIsUserMenuOpen(false);
+        }
+    }, [user]);
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setIsLoggingIn(true);
