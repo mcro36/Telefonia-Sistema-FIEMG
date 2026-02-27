@@ -4,7 +4,7 @@ import { ModalWrapper, ModalFooter } from './ui/ModalWrapper.jsx';
 import { FormField, FormInput, FormSelect, FormSearchableSelect } from './ui/FormField.jsx';
 import { useDependencies } from '../hooks/useDependencies.js';
 
-export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit }) {
+export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit, unitId, draftMode, initialData, onDraftSubmit }) {
     const [formData, setFormData] = useState({
         numero: '',
         operadora: '',
@@ -32,17 +32,24 @@ export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit }) {
                     ...linhaToEdit,
                     tipoPlano: mappedType
                 });
+            } else if (draftMode && initialData) {
+                let mappedType = initialData.tipoPlano;
+                if (!['Fixo', 'Móvel'].includes(mappedType)) mappedType = 'Fixo';
+                setFormData({
+                    ...initialData,
+                    tipoPlano: mappedType
+                });
             } else {
                 setFormData({
                     numero: '',
                     operadora: '',
-                    unidadeId: '',
+                    unidadeId: unitId || '',
                     tipoPlano: 'Fixo',
                     status: 'Ativa'
                 });
             }
         }
-    }, [isOpen, linhaToEdit]);
+    }, [isOpen, linhaToEdit, initialData, draftMode, unitId]);
 
     function formatPhone(value, type) {
         const digits = value.replace(/\D/g, '');
@@ -108,7 +115,11 @@ export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit }) {
 
         if (hasError) return;
 
-        onSave(formData);
+        if (draftMode && onDraftSubmit) {
+            onDraftSubmit(formData);
+        } else if (onSave) {
+            onSave(formData);
+        }
     }
 
     return (

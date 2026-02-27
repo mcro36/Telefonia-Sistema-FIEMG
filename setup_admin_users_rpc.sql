@@ -94,6 +94,10 @@ $$ LANGUAGE plpgsql;
 
 
 -- 4. Função para EDITAR PERFIL E EMAIL DO USUÁRIO
+-- DROPAR ASSINATURAS ANTERIORES PARA LIMPAR CASH DE TIPO
+DROP FUNCTION IF EXISTS update_user_details(uuid, text, text, text);
+DROP FUNCTION IF EXISTS update_user_details(text, text, text, text);
+
 CREATE OR REPLACE FUNCTION update_user_details(
   target_user_id text,
   new_email text,

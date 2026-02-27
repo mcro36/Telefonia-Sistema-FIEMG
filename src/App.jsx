@@ -12,8 +12,9 @@ import { UraView } from './components/UraView.jsx';
 import { ProjetoView } from './components/ProjetoView.jsx';
 import { GerenciamentoContaModal } from './components/GerenciamentoContaModal.jsx';
 import { useAuth } from './contexts/AuthContext.jsx';
-import { User, Settings, ShieldCheck, LogOut, ChevronRight, Key } from 'lucide-react';
+import { User, Settings, ShieldCheck, LogOut, ChevronRight, Key, HeadphonesIcon } from 'lucide-react';
 import { TrocaSenhaModal } from './components/TrocaSenhaModal.jsx';
+import { FormularioModal } from './components/FormularioModal.jsx';
 
 export default function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
@@ -27,6 +28,7 @@ export default function App() {
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isGerenciamentoModalOpen, setIsGerenciamentoModalOpen] = useState(false);
     const [isTrocaSenhaModalOpen, setIsTrocaSenhaModalOpen] = useState(false);
+    const [isFormularioModalOpen, setIsFormularioModalOpen] = useState(false);
     const userMenuRef = useRef(null);
 
     // Fechar menu de usuário ao clicar fora
@@ -148,6 +150,21 @@ export default function App() {
                         <span>IEL</span>
                     </div>
                 </motion.div>
+
+                {/* Botão Flutuante de Solicitação Nova */}
+                <button
+                    onClick={() => setIsFormularioModalOpen(true)}
+                    className="absolute bottom-6 left-6 flex items-center gap-2 px-5 py-3 rounded-full bg-white dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-500 shadow-lg hover:shadow-xl transition-all font-semibold text-sm group"
+                >
+                    <HeadphonesIcon className="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform" />
+                    Solicitar serviço de telefonia
+                </button>
+
+                {/* Modal de Solicitação Externa */}
+                <FormularioModal
+                    isOpen={isFormularioModalOpen}
+                    onClose={() => setIsFormularioModalOpen(false)}
+                />
             </div>
         );
     }

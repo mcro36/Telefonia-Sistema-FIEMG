@@ -3,7 +3,7 @@ import { ModalWrapper, ModalFooter } from './ui/ModalWrapper.jsx';
 import { FormField, FormInput, FormSearchableSelect } from './ui/FormField.jsx';
 import { useDependencies } from '../hooks/useDependencies.js';
 
-export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit }) {
+export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit, unitId, draftMode, initialData, onDraftSubmit }) {
     const [formData, setFormData] = useState({
         nome: '',
         numero: '',
@@ -44,6 +44,12 @@ export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit }) {
                     redirecionamentoEnabled: !!ramalToEdit.redirecionamentoEnabled,
                     grupoCapturaEnabled: !!ramalToEdit.grupoCapturaEnabled
                 });
+            } else if (draftMode && initialData) {
+                setFormData({
+                    ...initialData,
+                    redirecionamentoEnabled: !!initialData.redirecionamentoEnabled,
+                    grupoCapturaEnabled: !!initialData.grupoCapturaEnabled
+                });
             } else {
                 setFormData({
                     nome: '',
@@ -51,7 +57,7 @@ export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit }) {
                     status: 'Ativo',
                     microsipUser: '',
                     microsipPass: '',
-                    unidadeId: '',
+                    unidadeId: unitId || '',
                     setor: '',
                     ddr: '',
                     observacao: '',
@@ -64,7 +70,7 @@ export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit }) {
                 });
             }
         }
-    }, [isOpen, ramalToEdit]);
+    }, [isOpen, ramalToEdit, initialData, draftMode, unitId]);
 
     function handleLocalSave() {
         const newErrors = { nome: false, numero: false };
@@ -117,7 +123,11 @@ export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit }) {
             }
         }
 
-        onSave({ ...formData, tipo: 'SIP' });
+        if (draftMode && onDraftSubmit) {
+            onDraftSubmit({ ...formData, tipo: 'SIP' });
+        } else if (onSave) {
+            onSave({ ...formData, tipo: 'SIP' });
+        }
     }
 
     return (

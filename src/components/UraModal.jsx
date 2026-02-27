@@ -3,7 +3,7 @@ import { ModalWrapper, ModalFooter } from './ui/ModalWrapper.jsx';
 import { FormField, FormInput, FormSearchableSelect } from './ui/FormField.jsx';
 import { useDependencies } from '../hooks/useDependencies.js';
 
-export function UraModal({ isOpen, onClose, onSave, uraToEdit }) {
+export function UraModal({ isOpen, onClose, onSave, uraToEdit, unitId, draftMode, initialData, onDraftSubmit }) {
     const [formData, setFormData] = useState({
         nome: '',
         linhaId: '',
@@ -32,18 +32,23 @@ export function UraModal({ isOpen, onClose, onSave, uraToEdit }) {
                     ...uraToEdit,
                     opcoes: Array.isArray(uraToEdit.opcoes) ? uraToEdit.opcoes : []
                 });
+            } else if (draftMode && initialData) {
+                setFormData({
+                    ...initialData,
+                    opcoes: Array.isArray(initialData.opcoes) ? initialData.opcoes : []
+                });
             } else {
                 setFormData({
                     nome: '',
                     linhaId: '',
-                    unidadeId: '',
+                    unidadeId: unitId || '',
                     mensagemPrincipal: '',
                     opcoes: [],
                     status: 'Ativa'
                 });
             }
         }
-    }, [isOpen, uraToEdit]);
+    }, [isOpen, uraToEdit, initialData, draftMode, unitId]);
 
     function handleLocalSave() {
         const newErrors = { nome: false, linhaId: false };
@@ -64,7 +69,11 @@ export function UraModal({ isOpen, onClose, onSave, uraToEdit }) {
             opcoes: formData.opcoes.filter(opt => opt.label.trim() !== '' || opt.destination.trim() !== '')
         };
 
-        onSave(cleanedData);
+        if (draftMode && onDraftSubmit) {
+            onDraftSubmit(cleanedData);
+        } else if (onSave) {
+            onSave(cleanedData);
+        }
     }
 
     function addOption() {
