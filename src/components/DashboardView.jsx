@@ -67,8 +67,8 @@ export function DashboardView() {
 
                 // 4. Distribution by city (Simulating Ramais por Região)
                 const { data: unitsData } = await supabase.from('unidades').select('id, cidade');
-                const { data: sipData } = await supabase.from('ramais_sip').select('unidade_id');
-                const { data: pabxData } = await supabase.from('ramais_pabx').select('unidade_id');
+                const { data: sipData, error: sipDataErr } = await supabase.from('ramais_sip').select('unidadeId');
+                const { data: pabxData, error: pabxDataErr } = await supabase.from('ramais_pabx').select('unidadeId');
 
                 if (unitsData) {
                     const unitCityMap = {};
@@ -82,8 +82,8 @@ export function DashboardView() {
                     const processExtensions = (extData) => {
                         if (!extData) return;
                         extData.forEach(e => {
-                            // Se a modelagem usa camelCase, pode vir como unidadeId nativo ou unidade_id após adapter
-                            const uId = e.unidade_id || e.unidadeId;
+                            // Se a modelagem usa camelCase
+                            const uId = e.unidadeId || e.unidade_id;
                             if (uId && unitCityMap[uId]) {
                                 const city = unitCityMap[uId];
                                 regionCounts[city] = (regionCounts[city] || 0) + 1;
