@@ -186,22 +186,22 @@ export function UnidadeView() {
                                         {unit.cidade || '-'}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4">
+                                <td className="px-6 py-4 max-w-[200px] lg:max-w-[300px] xl:max-w-[400px]">
                                     <div className="flex flex-col gap-1">
-                                        <span className="font-medium text-slate-500 dark:text-slate-400 text-left text-sm whitespace-nowrap">
+                                        <span className="font-medium text-slate-500 dark:text-slate-400 text-left text-sm truncate block" title={unit.nome}>
                                             {unit.nome}
                                         </span>
-                                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                                        <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 overflow-hidden">
                                             {unit.centroCusto && (
-                                                <div className="flex items-center gap-1.5" title="Centro de Custo">
-                                                    <Hash className="w-3.5 h-3.5" />
-                                                    CC: {unit.centroCusto}
+                                                <div className="flex items-center gap-1.5 min-w-0" title={`Centro de Custo: ${unit.centroCusto}`}>
+                                                    <Hash className="w-3.5 h-3.5 shrink-0" />
+                                                    <span className="truncate">CC: {unit.centroCusto}</span>
                                                 </div>
                                             )}
                                             {unit.contrato && (
-                                                <div className="flex items-center gap-1.5" title="Contrato Associado">
-                                                    <Briefcase className="w-3.5 h-3.5" />
-                                                    Contrato: {unit.contrato}
+                                                <div className="flex items-center gap-1.5 min-w-0" title={`Contrato: ${unit.contrato}`}>
+                                                    <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                                                    <span className="truncate">Contrato: {unit.contrato}</span>
                                                 </div>
                                             )}
                                         </div>

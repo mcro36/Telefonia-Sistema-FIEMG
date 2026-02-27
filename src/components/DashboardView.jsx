@@ -16,6 +16,9 @@ import {
     Tooltip,
     ResponsiveContainer
 } from 'recharts';
+import { useSupabaseTable } from '../hooks/useSupabaseTable';
+import { supabase } from '../lib/supabase';
+import { convertToCamel } from '../lib/utils';
 
 const data = [
     { name: 'Jan', value: 400 },
@@ -26,13 +29,93 @@ const data = [
     { name: 'Jun', value: 900 },
 ];
 
-const stats = [
-    { label: 'Total de Unidades', value: '45', icon: Building2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { label: 'Ramais SIP Ativos', value: '1,250', icon: PhoneCall, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-    { label: 'Linhas Disp.', value: '300', icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-];
-
 export function DashboardView() {
+    const [stats, setStats] = React.useState([
+        { label: 'Total de Unidades', value: '...', icon: Building2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+        { label: 'Ramais SIP Ativos', value: '...', icon: PhoneCall, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+        { label: 'Linhas', value: '...', icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+    ]);
+
+    const [regions, setRegions] = React.useState([]);
+
+    React.useEffect(() => {
+        async function loadDashboardData() {
+            try {
+                // 1. Unidades count
+                const { count: unidadesCount, error: uErr } = await supabase
+                    .from('unidades')
+                    .select('*', { count: 'exact', head: true });
+
+                // 2. Ramais SIP ativos count
+                const { count: sipCount, error: sErr } = await supabase
+                    .from('ramais_sip')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'Ativo');
+
+                // 3. Linhas (todas cadastradas)
+                const { count: linhasCount, error: lErr } = await supabase
+                    .from('linhas')
+                    .select('*', { count: 'exact', head: true });
+
+                if (!uErr && !sErr && !lErr) {
+                    setStats([
+                        { label: 'Total de Unidades', value: unidadesCount?.toString() || '0', icon: Building2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                        { label: 'Ramais SIP Ativos', value: sipCount?.toString() || '0', icon: PhoneCall, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                        { label: 'Linhas', value: linhasCount?.toString() || '0', icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+                    ]);
+                }
+
+                // 4. Distribution by city (Simulating Ramais por Região)
+                const { data: unitsData } = await supabase.from('unidades').select('id, cidade');
+                const { data: sipData } = await supabase.from('ramais_sip').select('unidade_id');
+                const { data: pabxData } = await supabase.from('ramais_pabx').select('unidade_id');
+
+                if (unitsData) {
+                    const unitCityMap = {};
+                    unitsData.forEach(u => {
+                        unitCityMap[u.id] = u.cidade || 'Não informada';
+                    });
+
+                    const regionCounts = {};
+                    let totalRamais = 0;
+
+                    const processExtensions = (extData) => {
+                        if (!extData) return;
+                        extData.forEach(e => {
+                            // Se a modelagem usa camelCase, pode vir como unidadeId nativo ou unidade_id após adapter
+                            const uId = e.unidade_id || e.unidadeId;
+                            if (uId && unitCityMap[uId]) {
+                                const city = unitCityMap[uId];
+                                regionCounts[city] = (regionCounts[city] || 0) + 1;
+                                totalRamais++;
+                            }
+                        });
+                    };
+
+                    processExtensions(sipData);
+                    processExtensions(pabxData);
+
+                    // Ordenar regiões pelas do maior para o menor e injetar total
+                    const sortedRegions = Object.keys(regionCounts)
+                        .map(city => ({
+                            label: city,
+                            value: regionCounts[city],
+                            total: totalRamais > 0 ? totalRamais : 1 // prevent div zero
+                        }))
+                        .sort((a, b) => b.value - a.value)
+                        .slice(0, 5); // top 5
+
+                    setRegions(sortedRegions);
+                }
+
+            } catch (err) {
+                console.error("Dashboard dataload err:", err);
+            }
+        }
+
+        loadDashboardData();
+    }, []);
+
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -107,16 +190,10 @@ export function DashboardView() {
                 <div className="bg-white dark:bg-[#1c1f26] p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-6">Ramais por Região</h3>
                     <div className="space-y-6">
-                        {[
-                            { label: 'Belo Horizonte', value: 850, total: 1000 },
-                            { label: 'Contagem', value: 220, total: 1000 },
-                            { label: 'Betim', value: 180, total: 1000 },
-                            { label: 'Uberlândia', value: 95, total: 1000 },
-                            { label: 'Juiz de Fora', value: 45, total: 1000 },
-                        ].map((reg, i) => (
+                        {regions.length > 0 ? regions.map((reg, i) => (
                             <div key={i} className="space-y-2">
                                 <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400">
-                                    <span>{reg.label}</span>
+                                    <span className="truncate pr-2" title={reg.label}>{reg.label}</span>
                                     <span className="font-medium text-slate-900 dark:text-white">{reg.value}</span>
                                 </div>
                                 <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
@@ -126,7 +203,9 @@ export function DashboardView() {
                                     />
                                 </div>
                             </div>
-                        ))}
+                        )) : (
+                            <div className="text-sm text-slate-500 text-center py-4">Nenhum dado encontrado</div>
+                        )}
                     </div>
                 </div>
             </div>
