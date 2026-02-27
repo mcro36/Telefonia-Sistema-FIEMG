@@ -205,11 +205,11 @@ export default function App() {
                                 className="flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-[#111621] p-1.5 rounded-lg transition-colors cursor-pointer"
                             >
                                 <div className="text-right hidden sm:block">
-                                    <p className="text-sm font-medium text-slate-900 dark:text-white leading-none">{roleUser?.name || session.user.email.split('@')[0]}</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{roleUser?.role || 'Usuário Autenticado'}</p>
+                                    <p className="text-sm font-medium text-slate-900 dark:text-white leading-none">{roleUser?.name || session?.user?.email?.split('@')[0] || 'Usuário'}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{hasRole('Administrador') ? 'Administrador' : 'Visualizador'}</p>
                                 </div>
                                 <div className="w-9 h-9 border border-blue-600/30 rounded-full bg-blue-100 dark:bg-[#151c2e] flex items-center justify-center text-blue-600 dark:text-blue-500 font-bold text-sm uppercase shadow-inner">
-                                    {roleUser?.avatarInitials || session.user.email[0]}
+                                    {roleUser?.avatarInitials || session?.user?.email?.[0] || 'U'}
                                 </div>
                             </button>
 
@@ -224,17 +224,25 @@ export default function App() {
                                         style={{ zIndex: 99999 }}
                                         className="absolute right-0 top-14 w-64 bg-white dark:bg-[#151a23] rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden origin-top-right flex flex-col pointer-events-auto"
                                     >
-                                        <div className="p-4 border-b border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-transparent">
-                                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">Conta Logada</p>
-                                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{roleUser?.name}</p>
-                                            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 truncate mt-0.5">{roleUser?.email}</p>
-                                        </div>
-
-                                        <div className="p-2 flex flex-col gap-0.5">
+                                        <div className="p-2 flex flex-col gap-0.5 mt-1">
                                             <button className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left">
                                                 <User className="w-4 h-4 text-slate-400" />
                                                 Meu Perfil
                                             </button>
+
+                                            {hasRole('Administrador') && (
+                                                <button
+                                                    onClick={() => {
+                                                        setIsUserMenuOpen(false);
+                                                        setIsGerenciamentoModalOpen(true);
+                                                    }}
+                                                    className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left"
+                                                >
+                                                    <ShieldCheck className="w-4 h-4 text-slate-400" />
+                                                    Gerenciamento de Contas
+                                                </button>
+                                            )}
+
                                             <button className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left">
                                                 <Settings className="w-4 h-4 text-slate-400" />
                                                 Configurações

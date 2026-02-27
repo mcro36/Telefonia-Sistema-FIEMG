@@ -21,7 +21,6 @@ function cn(...inputs) {
 
 const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'gerenciamento', label: 'Controle de Acessos', icon: ShieldCheck, isAction: true },
     { id: 'units', label: 'Unidades', icon: Building2 },
     { id: 'lines', label: 'Linhas', icon: ListOrdered },
     { id: 'extensions', label: 'Ramais', icon: Phone },
@@ -29,7 +28,7 @@ const menuItems = [
     { id: 'projects', label: 'Projetos', icon: Briefcase },
 ];
 
-export function Sidebar({ activeTab, setActiveTab, onOpenGerenciamento }) {
+export function Sidebar({ activeTab, setActiveTab }) {
     const { hasRole } = useAuth();
 
     return (
@@ -53,17 +52,7 @@ export function Sidebar({ activeTab, setActiveTab, onOpenGerenciamento }) {
                     return (
                         <button
                             key={item.id}
-                            onClick={() => {
-                                if (item.isAction) {
-                                    if (hasRole('Administrador')) {
-                                        onOpenGerenciamento();
-                                    } else {
-                                        alert("Acesso Negado: Seu perfil atual não tem permissão de Administrador!");
-                                    }
-                                } else {
-                                    setActiveTab(item.id);
-                                }
-                            }}
+                            onClick={() => setActiveTab(item.id)}
                             className={cn(
                                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group",
                                 isActive
@@ -71,8 +60,8 @@ export function Sidebar({ activeTab, setActiveTab, onOpenGerenciamento }) {
                                     : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400"
                             )}
                         >
-                            <Icon className={cn("w-5 h-5", item.isAction && !hasRole('Administrador') ? "opacity-50" : "")} />
-                            <span className={cn("text-sm font-medium", item.isAction && !hasRole('Administrador') ? "opacity-50" : "")}>{item.label}</span>
+                            <Icon className="w-5 h-5" />
+                            <span className="text-sm font-medium">{item.label}</span>
                             {isActive && <ChevronRight className="ml-auto w-4 h-4 opacity-50" />}
                         </button>
                     );
