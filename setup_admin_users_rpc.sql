@@ -73,3 +73,60 @@ BEGIN
 
 END;
 $$ LANGUAGE plpgsql;
+
+
+-- 3. Função para EXCLUIR VIRTUALMENTE ou COMPLETAMENTE UM USUARIO
+CREATE OR REPLACE FUNCTION delete_user(target_user_id uuid)
+RETURNS void
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Validação de Segurança
+  IF (coalesce((current_setting('request.jwt.claims', true)::jsonb)->'user_metadata'->>'role', '') != 'Administrador') THEN
+    RAISE EXCEPTION 'Acesso negado: Perfil de Administrador exigido.';
+  END IF;
+
+  -- Deleta fisicamente o usuário do Auth do Supabase
+  DELETE FROM auth.users WHERE id = target_user_id;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- 4. Função para EDITAR PERFIL E EMAIL DO USUÁRIO
+CREATE OR REPLACE FUNCTION update_user_details(
+  target_user_id uuid,
+  new_email text,
+  new_name text,
+  new_role text
+)
+RETURNS void
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  current_meta jsonb;
+BEGIN
+  -- Validação de Segurança
+  IF (coalesce((current_setting('request.jwt.claims', true)::jsonb)->'user_metadata'->>'role', '') != 'Administrador') THEN
+    RAISE EXCEPTION 'Acesso negado: Perfil de Administrador exigido.';
+  END IF;
+
+  -- Busca o metadata atual
+  SELECT raw_user_meta_data INTO current_meta FROM auth.users WHERE auth.users.id = target_user_id;
+  current_meta := coalesce(current_meta, '{}'::jsonb);
+
+  -- Modifica o JSON
+  current_meta := jsonb_set(current_meta, '{name}', to_jsonb(new_name));
+  current_meta := jsonb_set(current_meta, '{role}', to_jsonb(new_role));
+  current_meta := jsonb_set(current_meta, '{avatarInitials}', to_jsonb(upper(substring(new_name from 1 for 1))));
+
+  -- Atualiza na tabela Auth
+  UPDATE auth.users 
+  SET 
+    email = new_email,
+    raw_user_meta_data = current_meta 
+  WHERE auth.users.id = target_user_id;
+
+END;
+$$ LANGUAGE plpgsql;

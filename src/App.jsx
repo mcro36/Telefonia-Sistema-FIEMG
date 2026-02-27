@@ -5,28 +5,28 @@ import { UnidadeView } from './components/UnidadeView.jsx';
 import { LinesView } from './components/LinhasView.jsx';
 import { ExtensionsView } from './components/RamaisView.jsx';
 import { Bell, Search, Plus, PhoneCall, ListOrdered, Bot, Moon, Sun } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from './lib/supabase.js';
 import { useTheme } from './hooks/useTheme.js';
 import { UraView } from './components/UraView.jsx';
 import { ProjetoView } from './components/ProjetoView.jsx';
 import { GerenciamentoContaModal } from './components/GerenciamentoContaModal.jsx';
 import { useAuth } from './contexts/AuthContext.jsx';
-import { User, Settings, ShieldCheck, LogOut, ChevronRight } from 'lucide-react';
+import { User, Settings, ShieldCheck, LogOut, ChevronRight, Key } from 'lucide-react';
+import { TrocaSenhaModal } from './components/TrocaSenhaModal.jsx';
 
 export default function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [customTitle, setCustomTitle] = useState('');
-    const [session, setSession] = useState(null);
-    const [loading, setLoading] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [authError, setAuthError] = useState(null);
     const [isLoggingIn, setIsLoggingIn] = useState(false);
     const { theme, toggleTheme } = useTheme();
-    const { user: roleUser, hasRole } = useAuth(); // Importa nosso User mockado da regra RBAC
+    const { user, loadingAuth, hasRole, logout } = useAuth();
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [isGerenciamentoModalOpen, setIsGerenciamentoModalOpen] = useState(false);
+    const [isTrocaSenhaModalOpen, setIsTrocaSenhaModalOpen] = useState(false);
     const userMenuRef = useRef(null);
 
     // Fechar menu de usuário ao clicar fora
@@ -40,21 +40,6 @@ export default function App() {
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, []);
-
-    useEffect(() => {
-        // Obter sessão inicial
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setLoading(false);
-        });
-
-        // Ouvir mudanças na autenticação
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            setSession(session);
-        });
-
-        return () => subscription.unsubscribe();
     }, []);
 
     const handleLogin = async (e) => {
@@ -73,7 +58,7 @@ export default function App() {
         setIsLoggingIn(false);
     };
 
-    if (loading) {
+    if (loadingAuth) {
         return (
             <div className="min-h-screen bg-[#0a0c10] flex items-center justify-center">
                 <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -81,7 +66,7 @@ export default function App() {
         );
     }
 
-    if (!session) {
+    if (!user) {
         return (
             <div className="min-h-screen bg-slate-50 dark:bg-[#0a0c10] flex items-center justify-center p-4 transition-colors duration-300">
                 <button
@@ -199,17 +184,16 @@ export default function App() {
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    console.log('Avatar Clicado! Anterar Menu Para:', !isUserMenuOpen);
                                     setIsUserMenuOpen(prev => !prev);
                                 }}
                                 className="flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-[#111621] p-1.5 rounded-lg transition-colors cursor-pointer"
                             >
                                 <div className="text-right hidden sm:block">
-                                    <p className="text-sm font-medium text-slate-900 dark:text-white leading-none">{roleUser?.name || session?.user?.email?.split('@')[0] || 'Usuário'}</p>
+                                    <p className="text-sm font-medium text-slate-900 dark:text-white leading-none">{user?.name}</p>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{hasRole('Administrador') ? 'Administrador' : 'Visualizador'}</p>
                                 </div>
                                 <div className="w-9 h-9 border border-blue-600/30 rounded-full bg-blue-100 dark:bg-[#151c2e] flex items-center justify-center text-blue-600 dark:text-blue-500 font-bold text-sm uppercase shadow-inner">
-                                    {roleUser?.avatarInitials || session?.user?.email?.[0] || 'U'}
+                                    {user?.avatarInitials}
                                 </div>
                             </button>
 
@@ -225,9 +209,15 @@ export default function App() {
                                         className="absolute right-0 top-14 w-64 bg-white dark:bg-[#151a23] rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden origin-top-right flex flex-col pointer-events-auto"
                                     >
                                         <div className="p-2 flex flex-col gap-0.5 mt-1">
-                                            <button className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left">
-                                                <User className="w-4 h-4 text-slate-400" />
-                                                Meu Perfil
+                                            <button
+                                                onClick={() => {
+                                                    setIsUserMenuOpen(false);
+                                                    setIsTrocaSenhaModalOpen(true);
+                                                }}
+                                                className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left"
+                                            >
+                                                <Key className="w-4 h-4 text-slate-400" />
+                                                Trocar Senha
                                             </button>
 
                                             {hasRole('Administrador') && (
@@ -251,7 +241,7 @@ export default function App() {
 
                                         <div className="p-2 border-t border-slate-100 dark:border-slate-800/60">
                                             <button
-                                                onClick={async () => { await supabase.auth.signOut(); }}
+                                                onClick={logout}
                                                 className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors text-left"
                                             >
                                                 <LogOut className="w-4 h-4" />
@@ -295,6 +285,11 @@ export default function App() {
             <GerenciamentoContaModal
                 isOpen={isGerenciamentoModalOpen}
                 onClose={() => setIsGerenciamentoModalOpen(false)}
+            />
+
+            <TrocaSenhaModal
+                isOpen={isTrocaSenhaModalOpen}
+                onClose={() => setIsTrocaSenhaModalOpen(false)}
             />
         </div>
     );
