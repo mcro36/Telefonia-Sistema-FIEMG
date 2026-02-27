@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Search, UserPlus, Edit2, Trash2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { X, Search, UserPlus, Edit2, Trash2, ChevronLeft, ChevronRight, Loader2, Mail } from 'lucide-react';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase.js';
 import { createClient } from '@supabase/supabase-js';
 
@@ -11,6 +11,7 @@ const authAdminClient = createClient(supabaseUrl, supabaseAnonKey, {
 
 export function GerenciamentoContaModal({ isOpen, onClose }) {
     const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState(null);
 
     const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -62,37 +63,104 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
         }
     };
 
-    const handleAddUser = async () => {
+    const handleDeleteUser = async (user) => {
+        if (window.confirm(`Tem certeza que deseja excluir permanentemente o usuário ${user.name}?`)) {
+            const { error } = await supabase.rpc('delete_user', { target_user_id: user.id });
+            if (error) {
+                alert('Erro ao excluir usuário: ' + error.message);
+            } else {
+                setUsers(users.filter(u => u.id !== user.id));
+            }
+        }
+    };
+
+    const handleResendEmail = async (user) => {
+        if (window.confirm(`Deseja reenviar o e-mail de ativação para ${user.email}?`)) {
+            const { error } = await authAdminClient.auth.resend({
+                type: 'signup',
+                email: user.email,
+                options: {
+                    emailRedirectTo: window.location.origin
+                }
+            });
+            if (error) {
+                alert('Erro ao reenviar e-mail: ' + error.message);
+            } else {
+                alert('E-mail de ativação reenviado com sucesso para ' + user.email);
+            }
+        }
+    };
+
+    const handleSaveUser = async () => {
         if (!newUserName || !newUserEmail) return alert('Por favor, preencha todos os campos!');
         setIsCreating(true);
 
-        const defaultPassword = 'Fiemg@' + new Date().getFullYear() + '!';
+        if (editingUser) {
+            // Edição
+            const { error } = await supabase.rpc('update_user_details', {
+                target_user_id: editingUser.id,
+                new_email: newUserEmail,
+                new_name: newUserName,
+                new_role: newUserRole
+            });
 
-        const { data, error } = await authAdminClient.auth.signUp({
-            email: newUserEmail,
-            password: defaultPassword,
-            options: {
-                data: {
-                    name: newUserName,
-                    role: newUserRole,
-                    avatarInitials: newUserName[0].toUpperCase(),
-                    is_active: true
-                }
+            if (error) {
+                alert('Erro ao atualizar usuário: ' + error.message);
+            } else {
+                setIsAddUserModalOpen(false);
+                setEditingUser(null);
+                fetchUsers();
+                setTimeout(() => alert('Usuário atualizado com sucesso!'), 300);
             }
-        });
-
-        if (error) {
-            alert('Erro ao criar usuário: ' + error.message);
             setIsCreating(false);
         } else {
-            setNewUserName('');
-            setNewUserEmail('');
-            setNewUserRole('Viewer');
-            setIsAddUserModalOpen(false);
+            // Criação
+            const defaultPassword = 'Fiemg@' + new Date().getFullYear() + '!';
+
+            // Aqui adicionamos emailRedirectTo para garantir que o e-mail de ativação do Supabase 
+            // contenha o link reverso correspondente a este ambiente.
+            const { data, error } = await authAdminClient.auth.signUp({
+                email: newUserEmail,
+                password: defaultPassword,
+                options: {
+                    emailRedirectTo: window.location.origin,
+                    data: {
+                        name: newUserName,
+                        role: newUserRole,
+                        avatarInitials: newUserName[0].toUpperCase(),
+                        is_active: true
+                    }
+                }
+            });
+
+            if (error) {
+                alert('Erro ao criar usuário: ' + error.message);
+            } else {
+                setNewUserName('');
+                setNewUserEmail('');
+                setNewUserRole('Viewer');
+                setIsAddUserModalOpen(false);
+                fetchUsers(); // Recarrega lista
+                setTimeout(() => alert(`Usuário criado com sucesso!\nUm e-mail de ativação foi enviado.\nSenha Provisória: ${defaultPassword}`), 300);
+            }
             setIsCreating(false);
-            fetchUsers(); // Recarrega lista
-            setTimeout(() => alert(`Usuário criado com sucesso!\nSenha Padrão: ${defaultPassword}`), 300);
         }
+    };
+
+    const openEditModal = (user) => {
+        setEditingUser(user);
+        setNewUserName(user.name);
+        setNewUserEmail(user.email);
+        setNewUserRole(user.role);
+        setIsAddUserModalOpen(true);
+    };
+
+    const openCreateModal = () => {
+        setEditingUser(null);
+        setNewUserName('');
+        setNewUserEmail('');
+        setNewUserRole('Viewer');
+        setIsAddUserModalOpen(true);
     };
 
     const filteredUsers = users.filter(u =>
@@ -156,7 +224,7 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                                         </div>
                                     </label>
                                     <button
-                                        onClick={() => setIsAddUserModalOpen(true)}
+                                        onClick={openCreateModal}
                                         className="h-11 flex items-center justify-center gap-2 rounded-lg px-6 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition-all shadow-lg shadow-blue-600/20 whitespace-nowrap"
                                     >
                                         <UserPlus className="w-5 h-5" />
@@ -203,8 +271,8 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                                                         <td className="px-6 py-4 text-slate-500 dark:text-slate-400 text-sm">{u.email}</td>
                                                         <td className="px-6 py-4">
                                                             <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.role === 'Administrador'
-                                                                    ? 'bg-blue-100 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
-                                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                                                                ? 'bg-blue-100 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30'
+                                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
                                                                 }`}>
                                                                 {u.role}
                                                             </span>
@@ -223,11 +291,14 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4">
-                                                            <div className="flex justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button className="text-slate-400 hover:text-blue-500 transition-colors p-1" title="Editar">
+                                                            <div className="flex justify-end gap-3 transition-opacity">
+                                                                <button onClick={() => handleResendEmail(u)} className="text-slate-400 hover:text-green-600 transition-colors p-1" title="Reenviar E-mail de Ativação">
+                                                                    <Mail className="w-4 h-4" />
+                                                                </button>
+                                                                <button onClick={() => openEditModal(u)} className="text-slate-400 hover:text-blue-500 transition-colors p-1" title="Editar">
                                                                     <Edit2 className="w-4 h-4" />
                                                                 </button>
-                                                                <button className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Excluir">
+                                                                <button onClick={() => handleDeleteUser(u)} className="text-slate-400 hover:text-red-500 transition-colors p-1" title="Excluir">
                                                                     <Trash2 className="w-4 h-4" />
                                                                 </button>
                                                             </div>
@@ -267,7 +338,7 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                                 className="bg-white dark:bg-[#111621] w-full max-w-lg rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden"
                             >
                                 <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-[#0a0c10]">
-                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Novo Usuário</h3>
+                                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">{editingUser ? 'Editar Usuário' : 'Novo Usuário'}</h3>
                                     <button
                                         onClick={() => setIsAddUserModalOpen(false)}
                                         className="text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors"
@@ -316,12 +387,12 @@ export function GerenciamentoContaModal({ isOpen, onClose }) {
                                         Cancelar
                                     </button>
                                     <button
-                                        onClick={handleAddUser}
+                                        onClick={handleSaveUser}
                                         disabled={isCreating}
                                         className="px-6 py-2 text-sm flex items-center gap-2 font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-sm disabled:opacity-50"
                                     >
                                         {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                        {isCreating ? 'Criando...' : 'Criar Conta'}
+                                        {isCreating ? 'Salvando...' : editingUser ? 'Salvar Alterações' : 'Criar Conta'}
                                     </button>
                                 </div>
                             </motion.div>
