@@ -143,9 +143,9 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
 
                 <FormField label="Cidade" className="col-span-1 md:col-span-4">
                     <FormInput
-                        placeholder="Ex: Belo Horizonte"
+                        placeholder="Ex: BELO HORIZONTE"
                         value={formData.cidade}
-                        onChange={e => setFormData({ ...formData, cidade: e.target.value })}
+                        onChange={e => setFormData({ ...formData, cidade: e.target.value.toUpperCase() })}
                     />
                 </FormField>
 

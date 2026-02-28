@@ -9,6 +9,7 @@ import { exportToPDF } from '../lib/exportUtils.js';
 export function LinesView() {
     const { data: lines, isLoading, saveRecord, deleteRecord, setData: setLines } = useSupabaseTable({
         tableName: 'linhas',
+        selectQuery: '*, unidades(nome)',
         order: { column: 'numero', ascending: true }
     });
 
@@ -58,6 +59,7 @@ export function LinesView() {
         const head = ['Linha', 'Operadora', 'Status'];
         const body = filteredLines.map(line => [
             line.numero || '-',
+            line.unidades?.nome || '-',
             line.operadora || '-',
             line.status || '-'
         ]);
@@ -86,6 +88,7 @@ export function LinesView() {
                     <thead className="bg-slate-50 dark:bg-[#111621]">
                         <tr>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Linha</th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Unidade</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Operadora</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                             <th className="relative px-6 py-4">
@@ -99,11 +102,18 @@ export function LinesView() {
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center">
                                         <div className="flex-shrink-0 h-10 w-10 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 font-bold text-sm mr-4 transition-colors">
-                                            <span className="material-symbols-outlined text-[20px]">phone_iphone</span>
+                                            <span className="material-symbols-outlined text-[20px]">
+                                                {line.numero && line.numero.replace(/\D/g, '').length === 11 ? 'smartphone' : 'call'}
+                                            </span>
                                         </div>
                                         <span className={`font-medium ${line.status === 'Inativa' ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-900 dark:text-white transition-colors'}`}>
                                             {line.numero}
                                         </span>
+                                    </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                    <div className="text-sm text-slate-900 dark:text-slate-200 font-medium">
+                                        {line.unidades?.nome || <span className="text-slate-400 italic">Sem Unidade</span>}
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap">
