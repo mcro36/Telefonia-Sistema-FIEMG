@@ -165,9 +165,9 @@ export function UnidadeView() {
                             <th className="w-[10%] px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Entidade</th>
                             <th className="w-[15%] px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cidade</th>
                             <th className="w-[30%] px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Unidade</th>
-                            <th className="w-[15%] px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Faixa de Ramais</th>
-                            <th className="w-[15%] px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ramais Ativos</th>
-                            <th className="w-[10%] px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Linhas Ativas</th>
+                            <th className="w-[20%] px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Faixa de Ramais</th>
+                            <th className="w-[12%] px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ramais Ativos</th>
+                            <th className="w-[8%] px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Linhas Ativas</th>
                             <th className="relative px-6 py-4">
                                 <span className="sr-only">Ações</span>
                             </th>
@@ -207,9 +207,9 @@ export function UnidadeView() {
                                         </div>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4">
+                                <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex flex-col items-center justify-center">
-                                        <span className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                        <span className="inline-flex rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
                                             {unit.faixaRamais || 'Não definida'}
                                         </span>
                                     </div>
