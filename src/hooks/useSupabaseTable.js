@@ -65,6 +65,8 @@ export function useSupabaseTable({ tableName, selectQuery = '*', order = null })
             // Converter chaves de camelCase para snake_case para o banco de dados
             const snakeData = convertToSnake(cleanData);
 
+            console.log(`[useSupabaseTable] Salvando em ${tableName}:`, { cleanData, snakeData });
+
             if (snakeData.id && typeof snakeData.id === 'string' && !snakeData.id.includes('.')) {
                 const { error } = await supabase
                     .from(tableName)
@@ -82,7 +84,11 @@ export function useSupabaseTable({ tableName, selectQuery = '*', order = null })
             await fetchData();
             return { success: true };
         } catch (error) {
-            console.error(`Error saving ${tableName}:`, error);
+            console.group(`[useSupabaseTable] Erro Crítico ao salvar ${tableName}`);
+            console.error("Detalhes do erro:", error);
+            console.error("Configuração Supabase:", { url: supabase.supabaseUrl });
+            console.groupEnd();
+
             const isPermissionError = error.code === '42501' || error.status === 403;
             const message = isPermissionError
                 ? "Erro de Permissão: Você precisa estar logado com um perfil de 'Administrador' para realizar esta alteração."
