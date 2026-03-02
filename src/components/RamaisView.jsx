@@ -82,7 +82,7 @@ export function ExtensionsView() {
             ext.nome || 'Ramal Padrão',
             ext.numero || '-',
             ext.status || '-',
-            ext.recursoPabxId ? `PABX - ${ext.recursos_pabx?.tecnologia_padrao || ext.tipoRamal || 'Analógico'}` : 'SIP',
+            ext.recursoPabxId ? `PABX - ${ext.recursosPabx?.tecnologiaPadrao || ext.tipoRamal || 'Analógico'}` : 'SIP',
             ext.linhas?.numero || '-',
             ext.unidades?.nome || 'Geral',
             ext.setor || '-'
@@ -152,7 +152,7 @@ export function ExtensionsView() {
                                     <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${!ext.recursoPabxId ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10' : 'bg-slate-100 text-slate-600 dark:bg-slate-800'
                                         }`}>
                                         {ext.recursoPabxId ? (
-                                            <>PABX - {ext.recursos_pabx?.tecnologia_padrao || ext.tipoRamal || 'Analógico'}</>
+                                            <>PABX - {ext.recursosPabx?.tecnologiaPadrao || ext.tipoRamal || 'Analógico'}</>
                                         ) : (
                                             'SIP'
                                         )}

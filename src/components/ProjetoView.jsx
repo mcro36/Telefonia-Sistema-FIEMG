@@ -1,14 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, ChevronRight, ChevronDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, Loader2, Check, X, MessageSquarePlus } from 'lucide-react';
 import { CadastroProjetoView } from './CadastroProjetoView.jsx';
 import { PageHeader } from './ui/PageLayout.jsx';
 import { ProtectedRoute } from './ui/ProtectedRoute.jsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useSupabaseTable } from '../hooks/useSupabaseTable.js';
+import { supabase } from '../lib/supabase.js';
+import { convertToCamel } from '../lib/utils.js';
 
 export function ProjetoView({ setPageTitle }) {
     const [expandedRows, setExpandedRows] = useState([]);
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'create'
+
+    const { data: projetos, isLoading, fetchData, deleteRecord } = useSupabaseTable({
+        tableName: 'projetos',
+        selectQuery: 'id, nome, descricao, unidade_id, progresso, data_inicio, deadline, chamado, status, created_at, unidades(nome)',
+        order: { column: 'created_at', ascending: false }
+    });
+
+    // Sub-itens expandidos: cache local
+    const [projetoItensMap, setProjetoItensMap] = useState({});
+
+    // Edit mode
+    const [editingProjetoId, setEditingProjetoId] = useState(null);
+    const [editedItems, setEditedItems] = useState({}); // { itemId: { statusItem, observacao } }
+    const [editingObsId, setEditingObsId] = useState(null); // item id currently editing observation
+    const [tempObs, setTempObs] = useState('');
 
     useEffect(() => {
         if (setPageTitle) {
@@ -16,90 +34,191 @@ export function ProjetoView({ setPageTitle }) {
         }
     }, [viewMode, setPageTitle]);
 
-    const toggleRow = (id) => {
-        setExpandedRows(prev =>
-            prev.includes(id) ? prev.filter(rowId => rowId !== id) : [...prev, id]
-        );
+    const toggleRow = async (id) => {
+        if (expandedRows.includes(id)) {
+            setExpandedRows(prev => prev.filter(rowId => rowId !== id));
+        } else {
+            setExpandedRows(prev => [...prev, id]);
+            // Carregar itens do projeto se ainda não carregados
+            if (!projetoItensMap[id]) {
+                const { data, error } = await supabase
+                    .from('projeto_itens')
+                    .select('id, item_tipo, item_id, item_label, status_item, observacao')
+                    .eq('projeto_id', id);
+                if (!error) {
+                    setProjetoItensMap(prev => ({ ...prev, [id]: convertToCamel(data) || [] }));
+                } else {
+                    console.error(`Erro ao buscar itens do projeto ${id}:`, error);
+                }
+            }
+        }
     };
 
     const isExpanded = (id) => expandedRows.includes(id);
 
-    const handleEdit = (id, e) => {
+    const handleEdit = async (id, e) => {
         e.stopPropagation();
-        setViewMode('create');
+        // Ensure row is expanded and items loaded
+        if (!expandedRows.includes(id)) {
+            await toggleRow(id);
+        }
+        // Initialize edited items from current data
+        const items = projetoItensMap[id] || [];
+        const edits = {};
+        items.forEach(item => {
+            edits[item.id] = { statusItem: item.statusItem || 'Agendado', observacao: item.observacao || '' };
+        });
+        setEditedItems(edits);
+        setEditingProjetoId(id);
     };
 
-    const handleDelete = (id, e) => {
+    const handleSaveEdits = async (projetoId) => {
+        try {
+            const items = projetoItensMap[projetoId] || [];
+            const updates = items.map(item => {
+                const edited = editedItems[item.id];
+                if (!edited) return null;
+                return supabase
+                    .from('projeto_itens')
+                    .update({ status_item: edited.statusItem, observacao: edited.observacao })
+                    .eq('id', item.id);
+            }).filter(Boolean);
+
+            await Promise.all(updates);
+
+            // Calcular novo progresso
+            const totalItems = items.length;
+            const completedItems = items.filter(item => {
+                const edited = editedItems[item.id];
+                const status = edited ? edited.statusItem : item.statusItem;
+                return status === 'Concluído';
+            }).length;
+            const newProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+            const newProjectStatus = newProgress === 100 ? 'Concluído' : 'Em Andamento';
+
+            // Atualizar projeto no banco (usando snake_case para chamada direta)
+            await supabase
+                .from('projetos')
+                .update({ progresso: newProgress, status: newProjectStatus })
+                .eq('id', projetoId);
+
+            // Update local cache
+            setProjetoItensMap(prev => ({
+                ...prev,
+                [projetoId]: items.map(item => ({
+                    ...item,
+                    statusItem: editedItems[item.id]?.statusItem || item.statusItem,
+                    observacao: editedItems[item.id]?.observacao || item.observacao
+                }))
+            }));
+
+            // Refresh projetos list to show new progress/status
+            fetchData();
+
+            setEditingProjetoId(null);
+            setEditedItems({});
+            setEditingObsId(null);
+        } catch (err) {
+            console.error('Erro ao salvar edições:', err);
+            alert('Erro ao salvar: ' + (err.message || ''));
+        }
+    };
+
+    const handleCancelEdit = () => {
+        setEditingProjetoId(null);
+        setEditedItems({});
+        setEditingObsId(null);
+    };
+
+    const handleDeleteItem = async (projetoId, itemId) => {
+        if (!window.confirm('Deseja remover este item do projeto?')) return;
+        try {
+            await supabase.from('projeto_itens').delete().eq('id', itemId);
+            setProjetoItensMap(prev => ({
+                ...prev,
+                [projetoId]: (prev[projetoId] || []).filter(i => i.id !== itemId)
+            }));
+            const { [itemId]: _, ...rest } = editedItems;
+            setEditedItems(rest);
+        } catch (err) {
+            console.error('Erro ao excluir item:', err);
+        }
+    };
+
+    const handleDelete = async (id, e) => {
         e.stopPropagation();
-        if (window.confirm("Atenção: Tem certeza que deseja excluir este projeto?")) {
-            // Lógica futura de deleção
+        if (window.confirm("Atenção: Tem certeza que deseja excluir este projeto e todos os seus itens?")) {
+            await deleteRecord(id);
         }
     };
 
     if (viewMode === 'create') {
-        return <CadastroProjetoView onCancel={() => setViewMode('list')} />;
+        return <CadastroProjetoView onCancel={() => { setViewMode('list'); fetchData(); }} />;
     }
+
+    // KPIs dinâmicos
+    const totalAtivos = projetos.filter(p => p.status === 'Em Andamento').length;
+    const totalAtraso = projetos.filter(p => {
+        if (!p.deadline) return false;
+        return new Date(p.deadline) < new Date() && p.status !== 'Concluído';
+    }).length;
+    const totalConcluidos = projetos.filter(p => p.status === 'Concluído').length;
+
+    const formatDate = (dateStr) => {
+        if (!dateStr) return '—';
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('pt-BR');
+    };
+
+    const getStatusBadgeClasses = (status) => {
+        switch (status) {
+            case 'Em Andamento':
+                return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+            case 'Concluído':
+                return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400';
+            case 'Aguardando':
+                return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
+            case 'Cancelado':
+                return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+            default:
+                return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+        }
+    };
+
+    const getItemStatusBadge = (status) => {
+        switch (status) {
+            case 'Concluído':
+                return 'bg-emerald-100/50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400';
+            case 'Em andamento':
+                return 'bg-amber-100/50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400';
+            case 'Problema':
+                return 'bg-red-100/50 text-red-700 dark:bg-red-500/10 dark:text-red-400';
+            default:
+                return 'bg-blue-100/50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400';
+        }
+    };
 
     const handleExport = () => {
         const doc = new jsPDF();
-
         doc.setFontSize(16);
-        doc.text('Relatório Completo de Projetos', 14, 15);
+        doc.text('Relatório de Projetos', 14, 15);
+        doc.setFontSize(9);
+        doc.setTextColor(120);
+        doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')} — ${projetos.length} projeto(s)`, 14, 22);
 
-        const projectData = [
-            {
-                projeto: 'Expansão Ramais BH - Unidade CIM',
-                desc: 'Infraestrutura física',
-                progresso: '75%',
-                inicio: '01/10/2023',
-                deadline: '15/12/2023',
-                status: 'Em Andamento',
-                itens: [
-                    { item: 'Ramal 2005', tipo: 'SIP', status: 'Ativo/Concluído', local: 'Bloco A - Andar 2' },
-                    { item: 'Ramal 2006', tipo: 'PABX', status: 'Em migração', local: 'Bloco B - Recepção' },
-                    { item: 'Linha 3215-4400', tipo: 'Linha Digital', status: 'Pendente', local: 'Entrada Geral' },
-                    { item: 'URA Suporte TI', tipo: 'URA', status: 'Ativo/Concluído', local: 'Data Center' }
-                ]
-            },
-            {
-                projeto: 'Upgrade Enlaces Ponto a Ponto OI',
-                desc: 'Upgrade de tecnologia',
-                progresso: '40%',
-                inicio: '15/09/2023',
-                deadline: '20/01/2024',
-                status: 'Aguardando',
-                itens: [
-                    { item: 'Linha Principal OI', tipo: 'E1', status: 'Pendente Instalação', local: 'Roteador Borda' }
-                ]
-            },
-            {
-                projeto: 'Implantação URA Unificada SENAI',
-                desc: 'Melhoria de atendimento',
-                progresso: '100%',
-                inicio: '01/08/2023',
-                deadline: '30/09/2023',
-                status: 'Concluído',
-                itens: [
-                    { item: 'URA SENAI Central', tipo: 'URA', status: 'Ativo/Concluído', local: 'Central Pabx' },
-                    { item: 'URA RH', tipo: 'URA', status: 'Ativo/Concluído', local: 'Recursos Humanos' }
-                ]
-            }
-        ];
+        let startY = 30;
 
-        let startY = 25;
-
-        projectData.forEach((p, index) => {
-            // Tabela principal (Projeto)
+        projetos.forEach((p, index) => {
             autoTable(doc, {
                 startY: startY,
                 head: index === 0 ? [['Projeto', 'Progresso', 'Início', 'Deadline', 'Status']] : [],
                 body: [
                     [
-                        { content: `${p.projeto}\n${p.desc}`, styles: { fontStyle: 'bold' } },
-                        { content: p.progresso, styles: { fontStyle: 'bold', halign: 'center' } },
-                        { content: p.inicio, styles: { halign: 'center' } },
-                        { content: p.deadline, styles: { halign: 'center' } },
-                        { content: p.status, styles: { halign: 'center' } }
+                        { content: `${p.nome}\n${p.descricao || ''}`, styles: { fontStyle: 'bold' } },
+                        { content: `${p.progresso || 0}%`, styles: { fontStyle: 'bold', halign: 'center' } },
+                        { content: formatDate(p.dataInicio), styles: { halign: 'center' } },
+                        { content: formatDate(p.deadline), styles: { halign: 'center' } },
+                        { content: p.status || 'Em Andamento', styles: { halign: 'center' } }
                     ]
                 ],
                 theme: 'plain',
@@ -112,53 +231,33 @@ export function ProjetoView({ setPageTitle }) {
                     3: { cellWidth: 30 },
                     4: { cellWidth: 35 }
                 },
-                didDrawCell: (data) => {
-                    // Simular a linha azul decorativa que o menu carrega enquanto expandido
-                    if (data.row.index === 0 && data.column.index === 0 && data.cell.section === 'body') {
-                        doc.setDrawColor(37, 99, 235); // blue-600
-                        doc.setLineWidth(1.5);
-                        doc.line(data.cell.x + 2, data.cell.y + 2, data.cell.x + 2, data.cell.y + data.cell.height - 2);
-                    }
-                }
             });
 
             startY = doc.lastAutoTable.finalY + 2;
 
-            // Subtabela (Itens expandidos)
-            if (p.itens && p.itens.length > 0) {
+            const itens = projetoItensMap[p.id] || [];
+            if (itens.length > 0) {
                 autoTable(doc, {
                     startY: startY,
-                    head: [['ITENS DO PROJETO', 'Tipo', 'Status Individual', 'Localização']],
-                    body: p.itens.map(item => [item.item, item.tipo, item.status, item.local]),
+                    head: [['Item', 'Tipo', 'Status', 'Obs.']],
+                    body: itens.map(item => [item.itemLabel || '—', item.itemTipo, item.statusItem || 'Agendado', item.observacao || '']),
                     theme: 'plain',
                     styles: { fontSize: 8, cellPadding: 3, textColor: [100, 116, 139] },
-                    headStyles: { textColor: [71, 85, 105], fontStyle: 'bold', fontSize: 7, cellPadding: { top: 4, bottom: 4, left: 3, right: 3 } },
-                    margin: { left: 24, right: 14 }, // Indentação simulando UI
-                    didDrawCell: (data) => {
-                        // Linha decorativa da subtabela
-                        if (data.column.index === 0 && data.cell.section === 'body') {
-                            doc.setDrawColor(37, 99, 235);
-                            doc.setLineWidth(1.5);
-                            doc.line(16, data.cell.y, 16, data.cell.y + data.cell.height);
-                        } else if (data.column.index === 0 && data.cell.section === 'head') {
-                            doc.setDrawColor(37, 99, 235);
-                            doc.setLineWidth(1.5);
-                            doc.line(16, data.cell.y, 16, data.cell.y + data.cell.height);
-                        }
-                    }
+                    headStyles: { textColor: [71, 85, 105], fontStyle: 'bold', fontSize: 7 },
+                    margin: { left: 24, right: 14 },
                 });
                 startY = doc.lastAutoTable.finalY + 6;
             } else {
                 startY += 6;
             }
 
-            if (startY > doc.internal.pageSize.height - 30 && index < projectData.length - 1) {
+            if (startY > doc.internal.pageSize.height - 30 && index < projetos.length - 1) {
                 doc.addPage();
                 startY = 20;
             }
         });
 
-        doc.save('projetos_expandidos_export.pdf');
+        doc.save('projetos_export.pdf');
     };
 
     return (
@@ -167,7 +266,7 @@ export function ProjetoView({ setPageTitle }) {
                 <div className="mb-8 pl-1 pr-1">
                     <PageHeader
                         searchPlaceholder="Pesquisar por nome, linha ou unidade..."
-                        onSearch={(e) => { }} // Lógica futura de busca
+                        onSearch={(e) => { }}
                         onExport={handleExport}
                         primaryAction={{
                             label: 'Novo Projeto',
@@ -180,285 +279,236 @@ export function ProjetoView({ setPageTitle }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                     <div className="p-4 rounded-xl bg-white dark:bg-[#1c222d] border border-slate-200 dark:border-slate-800">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ativos</p>
-                        <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-slate-100">12</p>
+                        <p className="text-2xl font-bold mt-1 text-slate-900 dark:text-slate-100">{totalAtivos}</p>
                     </div>
                     <div className="p-4 rounded-xl bg-white dark:bg-[#1c222d] border border-slate-200 dark:border-slate-800">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Em Atraso</p>
-                        <p className="text-2xl font-bold mt-1 text-red-500 dark:text-red-400">2</p>
+                        <p className="text-2xl font-bold mt-1 text-red-500 dark:text-red-400">{totalAtraso}</p>
                     </div>
                     <div className="p-4 rounded-xl bg-white dark:bg-[#1c222d] border border-slate-200 dark:border-slate-800">
                         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Concluídos</p>
-                        <p className="text-2xl font-bold mt-1 text-emerald-500 dark:text-emerald-400">48</p>
+                        <p className="text-2xl font-bold mt-1 text-emerald-500 dark:text-emerald-400">{totalConcluidos}</p>
                     </div>
                     <div className="p-4 rounded-xl bg-white dark:bg-[#1c222d] border border-slate-200 dark:border-slate-800">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Ramais</p>
-                        <p className="text-2xl font-bold mt-1 text-blue-600 dark:text-blue-500">1,240</p>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Projetos</p>
+                        <p className="text-2xl font-bold mt-1 text-blue-600 dark:text-blue-500">{projetos.length}</p>
                     </div>
                 </div>
 
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#1c222d] overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-separate border-spacing-0">
-                            <thead>
-                                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Projeto</th>
-                                    <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Progresso</th>
-                                    <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Início</th>
-                                    <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Deadline</th>
-                                    <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Status</th>
-                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 text-right">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
-                                {/* Row 1 */}
-                                <tr
-                                    className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer group"
-                                    onClick={() => toggleRow(1)}
-                                >
-                                    <td className="px-6 py-5">
-                                        <div className="flex items-center gap-3">
-                                            {isExpanded(1) ? (
-                                                <ChevronDown className="w-5 h-5 text-blue-600 dark:text-blue-500 shrink-0" />
-                                            ) : (
-                                                <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
-                                            )}
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Expansão Ramais BH - Unidade CIM</span>
-                                                <span className="text-xs text-slate-500">Infraestrutura física</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex flex-col gap-1.5 min-w-[120px] mx-auto">
-                                            <div className="flex items-center justify-between text-[11px] font-bold dark:text-slate-300">
-                                                <span>75%</span>
-                                            </div>
-                                            <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                <div className="h-full bg-blue-600 rounded-full" style={{ width: '75%' }}></div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400">01/10/2023</td>
-                                    <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400 font-medium">15/12/2023</td>
-                                    <td className="px-6 py-5 text-center">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                                            Em Andamento
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-5 text-right" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex items-center justify-end gap-2">
-                                            <ProtectedRoute>
-                                                <button onClick={(e) => handleEdit(1, e)} className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" title="Editar">
-                                                    <Pencil className="w-5 h-5" />
-                                                </button>
-                                            </ProtectedRoute>
-                                            <ProtectedRoute>
-                                                <button onClick={(e) => handleDelete(1, e)} className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors" title="Excluir">
-                                                    <Trash2 className="w-5 h-5" />
-                                                </button>
-                                            </ProtectedRoute>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                {/* Expanded Content 1 */}
-                                {isExpanded(1) && (
-                                    <tr className="bg-slate-50/50 dark:bg-black/20">
-                                        <td className="px-0 py-0" colSpan="6">
-                                            <div className="overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                                                <div className="px-12 py-4 border-l-4 border-blue-600">
-                                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Itens do Projeto</div>
-                                                    <table className="w-full text-sm">
-                                                        <thead className="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700/50">
-                                                            <tr>
-                                                                <th className="py-2 font-medium text-left">Item</th>
-                                                                <th className="py-2 font-medium text-left">Tipo</th>
-                                                                <th className="py-2 font-medium text-left">Status Individual</th>
-                                                                <th className="py-2 font-medium text-right">Localização</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/30">
-                                                            <tr>
-                                                                <td className="py-3 font-semibold text-slate-700 dark:text-slate-200">Ramal 2005</td>
-                                                                <td className="py-3 text-slate-500 dark:text-slate-400">SIP</td>
-                                                                <td className="py-3">
-                                                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100/50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                                                        Ativo/Concluído
-                                                                    </span>
-                                                                </td>
-                                                                <td className="py-3 text-right text-slate-400">Bloco A - Andar 2</td>
-                                                            </tr>
-                                                            <tr>
-                                                                <td className="py-3 font-semibold text-slate-700 dark:text-slate-200">Ramal 2006</td>
-                                                                <td className="py-3 text-slate-500 dark:text-slate-400">PABX</td>
-                                                                <td className="py-3">
-                                                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100/50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                                                                        Em migração
-                                                                    </span>
-                                                                </td>
-                                                                <td className="py-3 text-right text-slate-400">Bloco B - Recepção</td>
-                                                            </tr>
-                                                            <tr>
-                                                                <td className="py-3 font-semibold text-slate-700 dark:text-slate-200">Linha 3215-4400</td>
-                                                                <td className="py-3 text-slate-500 dark:text-slate-400">Linha Digital</td>
-                                                                <td className="py-3">
-                                                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100/50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                                                        Pendente
-                                                                    </span>
-                                                                </td>
-                                                                <td className="py-3 text-right text-slate-400">Entrada Geral</td>
-                                                            </tr>
-                                                            <tr>
-                                                                <td className="py-3 font-semibold text-slate-700 dark:text-slate-200">URA Suporte TI</td>
-                                                                <td className="py-3 text-slate-500 dark:text-slate-400">URA</td>
-                                                                <td className="py-3">
-                                                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100/50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                                                        Ativo/Concluído
-                                                                    </span>
-                                                                </td>
-                                                                <td className="py-3 text-right text-slate-400">Data Center</td>
-                                                            </tr>
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        </td>
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-16">
+                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                        </div>
+                    ) : projetos.length === 0 ? (
+                        <div className="text-center py-16 text-slate-500 dark:text-slate-400">
+                            <p className="text-lg font-semibold">Nenhum projeto cadastrado</p>
+                            <p className="text-sm mt-1">Clique em "Novo Projeto" para começar.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-separate border-spacing-0">
+                                <thead>
+                                    <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                                        <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Projeto</th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Progresso</th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Início</th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Deadline</th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Status</th>
+                                        <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 text-right">Ações</th>
                                     </tr>
-                                )}
+                                </thead>
+                                <tbody className="divide-y divide-slate-200 dark:divide-slate-800/50">
+                                    {projetos.map(projeto => (
+                                        <React.Fragment key={projeto.id}>
+                                            <tr
+                                                className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer group"
+                                                onClick={() => toggleRow(projeto.id)}
+                                            >
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-center gap-3">
+                                                        {isExpanded(projeto.id) ? (
+                                                            <ChevronDown className="w-5 h-5 text-blue-600 dark:text-blue-500 shrink-0" />
+                                                        ) : (
+                                                            <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
+                                                        )}
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{projeto.nome}</span>
+                                                            <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">{projeto.unidades?.nome || 'Sem Unidade Atribuída'}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex flex-col gap-1.5 min-w-[120px] mx-auto">
+                                                        <div className="flex items-center justify-between text-[11px] font-bold dark:text-slate-300">
+                                                            <span>{projeto.progresso || 0}%</span>
+                                                        </div>
+                                                        <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                            <div
+                                                                className={`h-full rounded-full ${(projeto.progresso || 0) >= 100 ? 'bg-emerald-500' : 'bg-blue-600'}`}
+                                                                style={{ width: `${projeto.progresso || 0}%` }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400">{formatDate(projeto.dataInicio)}</td>
+                                                <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400 font-medium">{formatDate(projeto.deadline)}</td>
+                                                <td className="px-6 py-5 text-center">
+                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClasses(projeto.status)}`}>
+                                                        {projeto.status || 'Em Andamento'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-5 text-right" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <ProtectedRoute>
+                                                            <button onClick={(e) => handleEdit(projeto.id, e)} className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" title="Editar">
+                                                                <Pencil className="w-5 h-5" />
+                                                            </button>
+                                                        </ProtectedRoute>
+                                                        <ProtectedRoute>
+                                                            <button onClick={(e) => handleDelete(projeto.id, e)} className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors" title="Excluir">
+                                                                <Trash2 className="w-5 h-5" />
+                                                            </button>
+                                                        </ProtectedRoute>
+                                                    </div>
+                                                </td>
+                                            </tr>
 
-                                {/* Row 2 */}
-                                <tr
-                                    className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
-                                    onClick={() => toggleRow(2)}
-                                >
-                                    <td className="px-6 py-5">
-                                        <div className="flex items-center gap-3">
-                                            {isExpanded(2) ? (
-                                                <ChevronDown className="w-5 h-5 text-blue-600 dark:text-blue-500 shrink-0" />
-                                            ) : (
-                                                <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
+                                            {/* Expanded Content */}
+                                            {isExpanded(projeto.id) && (
+                                                <tr className="bg-slate-50/50 dark:bg-black/20">
+                                                    <td className="px-0 py-0" colSpan="6">
+                                                        <div className="overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                                                            <div className="px-12 py-4 border-l-4 border-blue-600">
+                                                                {!projetoItensMap[projeto.id] ? (
+                                                                    <div className="flex items-center gap-2 py-2">
+                                                                        <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+                                                                        <span className="text-xs text-slate-500">Carregando itens...</span>
+                                                                    </div>
+                                                                ) : projetoItensMap[projeto.id].length === 0 ? (
+                                                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Nenhum item adicionado</div>
+                                                                ) : (
+                                                                    <>
+                                                                        <div className="flex items-center justify-between mb-3">
+                                                                            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Itens do Projeto</div>
+                                                                            {editingProjetoId === projeto.id && (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <button
+                                                                                        onClick={() => handleSaveEdits(projeto.id)}
+                                                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
+                                                                                        title="Salvar alterações"
+                                                                                    >
+                                                                                        <Check className="w-3.5 h-3.5" /> Salvar
+                                                                                    </button>
+                                                                                    <button
+                                                                                        onClick={handleCancelEdit}
+                                                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                                                                                        title="Cancelar edição"
+                                                                                    >
+                                                                                        <X className="w-3.5 h-3.5" /> Cancelar
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <table className="w-full text-sm">
+                                                                            <thead className="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700/50">
+                                                                                <tr>
+                                                                                    <th className="py-2 font-medium text-left">Item</th>
+                                                                                    <th className="py-2 font-medium text-left">Tipo</th>
+                                                                                    <th className="py-2 font-medium text-left">Status</th>
+                                                                                    <th className="py-2 font-medium text-left">Observação</th>
+                                                                                    {editingProjetoId === projeto.id && (
+                                                                                        <th className="py-2 font-medium text-right">Ações</th>
+                                                                                    )}
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/30">
+                                                                                {projetoItensMap[projeto.id].map(item => (
+                                                                                    <tr key={item.id}>
+                                                                                        <td className="py-3 font-semibold text-slate-700 dark:text-slate-200">{item.itemLabel || '—'}</td>
+                                                                                        <td className="py-3 text-slate-500 dark:text-slate-400 capitalize">{item.itemTipo}</td>
+                                                                                        <td className="py-3">
+                                                                                            {editingProjetoId === projeto.id ? (
+                                                                                                <select
+                                                                                                    className="bg-white dark:bg-[#111621] border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer text-slate-700 dark:text-slate-200"
+                                                                                                    value={editedItems[item.id]?.statusItem || item.statusItem || 'Agendado'}
+                                                                                                    onChange={(e) => setEditedItems(prev => ({ ...prev, [item.id]: { ...prev[item.id], statusItem: e.target.value } }))}
+                                                                                                >
+                                                                                                    <option value="Agendado">Agendado</option>
+                                                                                                    <option value="Validado">Validado</option>
+                                                                                                    <option value="Em andamento">Em andamento</option>
+                                                                                                    <option value="Concluído">Concluído</option>
+                                                                                                    <option value="Problema">Problema</option>
+                                                                                                </select>
+                                                                                            ) : (
+                                                                                                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${getItemStatusBadge(item.statusItem)}`}>
+                                                                                                    <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                                                                                                    {item.statusItem || 'Agendado'}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </td>
+                                                                                        <td className="py-3">
+                                                                                            {editingProjetoId === projeto.id ? (
+                                                                                                editingObsId === item.id ? (
+                                                                                                    <div className="flex items-center gap-2">
+                                                                                                        <input
+                                                                                                            className="flex-1 bg-white dark:bg-[#111621] border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 dark:text-slate-200"
+                                                                                                            value={tempObs}
+                                                                                                            onChange={(e) => setTempObs(e.target.value)}
+                                                                                                            placeholder="Digite a observação..."
+                                                                                                            autoFocus
+                                                                                                        />
+                                                                                                        <button onClick={() => { setEditedItems(prev => ({ ...prev, [item.id]: { ...prev[item.id], observacao: tempObs } })); setEditingObsId(null); }} className="p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded transition-colors" title="Confirmar">
+                                                                                                            <Check className="w-4 h-4" />
+                                                                                                        </button>
+                                                                                                        <button onClick={() => setEditingObsId(null)} className="p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors" title="Cancelar">
+                                                                                                            <X className="w-4 h-4" />
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                ) : (
+                                                                                                    <button
+                                                                                                        onClick={() => { setTempObs(editedItems[item.id]?.observacao || item.observacao || ''); setEditingObsId(item.id); }}
+                                                                                                        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition-colors"
+                                                                                                        title="Editar observação"
+                                                                                                    >
+                                                                                                        <MessageSquarePlus className="w-3.5 h-3.5" />
+                                                                                                        <span className="truncate max-w-[150px]">{editedItems[item.id]?.observacao || item.observacao || 'Adicionar...'}</span>
+                                                                                                    </button>
+                                                                                                )
+                                                                                            ) : (
+                                                                                                <span className="text-slate-400 truncate max-w-[200px] block">{item.observacao || '—'}</span>
+                                                                                            )}
+                                                                                        </td>
+                                                                                        {editingProjetoId === projeto.id && (
+                                                                                            <td className="py-3 text-right">
+                                                                                                <div className="flex items-center justify-end gap-1">
+                                                                                                    <button
+                                                                                                        onClick={() => handleDeleteItem(projeto.id, item.id)}
+                                                                                                        className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                                                                                                        title="Remover item"
+                                                                                                    >
+                                                                                                        <Trash2 className="w-4 h-4" />
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                            </td>
+                                                                                        )}
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
                                             )}
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Migração VoIP Regional Norte</span>
-                                                <span className="text-xs text-slate-500">Upgrade de tecnologia</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex flex-col gap-1.5 min-w-[120px] mx-auto">
-                                            <div className="flex items-center justify-between text-[11px] font-bold dark:text-slate-300">
-                                                <span>40%</span>
-                                            </div>
-                                            <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                <div className="h-full bg-blue-600 rounded-full" style={{ width: '40%' }}></div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400">15/09/2023</td>
-                                    <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400 font-medium">20/01/2024</td>
-                                    <td className="px-6 py-5 text-center">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">
-                                            Aguardando
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-5 text-right" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex items-center justify-end gap-2">
-                                            <ProtectedRoute>
-                                                <button onClick={(e) => handleEdit(2, e)} className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" title="Editar">
-                                                    <Pencil className="w-5 h-5" />
-                                                </button>
-                                            </ProtectedRoute>
-                                            <ProtectedRoute>
-                                                <button onClick={(e) => handleDelete(2, e)} className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors" title="Excluir">
-                                                    <Trash2 className="w-5 h-5" />
-                                                </button>
-                                            </ProtectedRoute>
-                                        </div>
-                                    </td>
-                                </tr>
-
-                                {/* Expanded Content 2 */}
-                                {isExpanded(2) && (
-                                    <tr className="bg-slate-50/50 dark:bg-black/20">
-                                        <td className="px-0 py-0" colSpan="6">
-                                            <div className="overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                                                <div className="px-12 py-4 border-l-4 border-blue-600">
-                                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Nenhum item adicionado</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-
-                                {/* Row 3 */}
-                                <tr
-                                    className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors cursor-pointer"
-                                    onClick={() => toggleRow(3)}
-                                >
-                                    <td className="px-6 py-5">
-                                        <div className="flex items-center gap-3">
-                                            {isExpanded(3) ? (
-                                                <ChevronDown className="w-5 h-5 text-blue-600 dark:text-blue-500 shrink-0" />
-                                            ) : (
-                                                <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
-                                            )}
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Manutenção Linhas FIEMG Sede</span>
-                                                <span className="text-xs text-slate-500">Reparo preventivo</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex flex-col gap-1.5 min-w-[120px] mx-auto">
-                                            <div className="flex items-center justify-between text-[11px] font-bold dark:text-slate-300">
-                                                <span>100%</span>
-                                            </div>
-                                            <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                <div className="h-full bg-emerald-500 rounded-full" style={{ width: '100%' }}></div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400">01/08/2023</td>
-                                    <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400 font-medium">30/09/2023</td>
-                                    <td className="px-6 py-5 text-center">
-                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                            Concluído
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-5 text-right" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex items-center justify-end gap-2">
-                                            <ProtectedRoute>
-                                                <button onClick={(e) => handleEdit(3, e)} className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" title="Editar">
-                                                    <Pencil className="w-5 h-5" />
-                                                </button>
-                                            </ProtectedRoute>
-                                            <ProtectedRoute>
-                                                <button onClick={(e) => handleDelete(3, e)} className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors" title="Excluir">
-                                                    <Trash2 className="w-5 h-5" />
-                                                </button>
-                                            </ProtectedRoute>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {/* Expanded Content 3 */}
-                                {isExpanded(3) && (
-                                    <tr className="bg-slate-50/50 dark:bg-black/20">
-                                        <td className="px-0 py-0" colSpan="6">
-                                            <div className="overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                                                <div className="px-12 py-4 border-l-4 border-blue-600">
-                                                    <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Nenhum item adicionado</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                        </React.Fragment>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

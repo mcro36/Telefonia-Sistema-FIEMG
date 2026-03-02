@@ -3,13 +3,14 @@ import { motion } from 'motion/react';
 import { ModalWrapper, ModalFooter } from './ui/ModalWrapper.jsx';
 import { FormField, FormInput, FormSelect } from './ui/FormField.jsx';
 
-export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
+export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit, units = [] }) {
     const [formData, setFormData] = useState({
         nome: '',
         entidade: 'SESI',
         cidade: '',
         endereco: '',
         unidadeIntegrada: false,
+        unidadePaiId: '',
         uo: '',
         centroCusto: '',
         contrato: '',
@@ -39,6 +40,7 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
                     cidade: '',
                     endereco: '',
                     unidadeIntegrada: false,
+                    unidadePaiId: '',
                     uo: '',
                     centroCusto: '',
                     contrato: '',
@@ -49,6 +51,37 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
             }
         }
     }, [isOpen, unitToEdit]);
+
+    function handleParentChange(parentId) {
+        setFormData(prev => ({ ...prev, unidadePaiId: parentId }));
+
+        if (parentId) {
+            const parentUnit = units.find(u => u.id === parentId);
+            if (parentUnit && parentUnit.faixaRamais) {
+                // Tenta dividir por ' - ' ou apenas '-'
+                const parts = parentUnit.faixaRamais.includes(' - ')
+                    ? parentUnit.faixaRamais.split(' - ')
+                    : parentUnit.faixaRamais.split('-');
+
+                if (parts.length === 2) {
+                    setFaixaStart(parts[0].trim());
+                    setFaixaEnd(parts[1].trim());
+                }
+            }
+        }
+    }
+
+    function handleToggleIntegrated(checked) {
+        setFormData(prev => ({
+            ...prev,
+            unidadeIntegrada: checked,
+            unidadePaiId: checked ? prev.unidadePaiId : ''
+        }));
+    }
+
+    const parentUnitsOptions = units
+        .filter(u => !unitToEdit || u.id !== unitToEdit.id)
+        .map(u => ({ value: u.id, label: u.nome }));
 
     function handleLocalSave() {
         const newErrors = { nome: false, uo: false, faixaStart: false, faixaEnd: false };
@@ -79,12 +112,17 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
 
         setErrors(newErrors);
 
-        if (hasError) return;
+        if (hasError) {
+            setGlobalError('Por favor, preencha todos os campos obrigatórios corretamente.');
+            return;
+        }
 
         const compiledFaixa = `${faixaStart.trim()} - ${faixaEnd.trim()}`;
         const finalData = { ...formData, faixaRamais: compiledFaixa };
         onSave(finalData);
     }
+
+    const [globalError, setGlobalError] = useState('');
 
     return (
         <ModalWrapper
@@ -102,6 +140,13 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
                 />
             }
         >
+            {globalError && (
+                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-900/50 rounded-lg flex items-center gap-3 text-red-700 dark:text-red-400 animate-in fade-in slide-in-from-top-2">
+                    <span className="material-symbols-outlined">error</span>
+                    <span className="text-sm font-medium">{globalError}</span>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 <div className="col-span-1 md:col-span-12">
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-2">
@@ -155,7 +200,7 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
                             type="checkbox"
                             className="peer h-5 w-5 rounded border-slate-200 dark:border-slate-800 bg-transparent text-blue-600 focus:ring-blue-500 transition-colors"
                             checked={formData.unidadeIntegrada}
-                            onChange={e => setFormData({ ...formData, unidadeIntegrada: e.target.checked })}
+                            onChange={e => handleToggleIntegrated(e.target.checked)}
                         />
                         <span className="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                             Esta é uma Unidade Integrada?
@@ -169,13 +214,17 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
                         animate={{ opacity: 1, height: 'auto' }}
                         className="col-span-1 md:col-span-12 bg-blue-50 dark:bg-blue-600/5 border border-blue-200 dark:border-blue-600/20 rounded-lg p-4 transition-colors"
                     >
-                        <FormField label="Vincular a Unidade Principal">
-                            <FormInput
-                                icon="search"
-                                placeholder="Pesquisar unidade principal..."
+                        <FormField label="Unidade Principal Responsável">
+                            <FormSelect
+                                value={formData.unidadePaiId}
+                                onChange={e => handleParentChange(e.target.value)}
+                                options={[
+                                    { value: '', label: 'Selecione a unidade principal...' },
+                                    ...parentUnitsOptions
+                                ]}
                             />
                         </FormField>
-                        <p className="text-xs text-slate-500 mt-2">Selecione a unidade "pai" à qual esta nova unidade responderá.</p>
+                        <p className="text-xs text-slate-500 mt-2">Ao selecionar a unidade pai, a faixa de ramais será copiada automaticamente para esta unidade.</p>
                     </motion.div>
                 )}
 
@@ -222,6 +271,8 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
                                 value={faixaStart}
                                 onChange={(e) => setFaixaStart(e.target.value.replace(/\D/g, ''))}
                                 error={errors.faixaStart}
+                                disabled={!!formData.unidadePaiId}
+                                title={formData.unidadePaiId ? "Faixa herdada da unidade principal" : ""}
                             />
                         </div>
                         <span className="material-symbols-outlined text-slate-400 hidden md:block">arrow_right_alt</span>
@@ -234,6 +285,8 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit }) {
                                 value={faixaEnd}
                                 onChange={(e) => setFaixaEnd(e.target.value.replace(/\D/g, ''))}
                                 error={errors.faixaEnd}
+                                disabled={!!formData.unidadePaiId}
+                                title={formData.unidadePaiId ? "Faixa herdada da unidade principal" : ""}
                             />
                         </div>
                     </div>

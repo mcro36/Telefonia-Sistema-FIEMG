@@ -26,6 +26,20 @@ export function TesteLinhaModal({ isOpen, onClose }) {
         setTestLog(prev => [...prev, { time: new Date().toLocaleTimeString(), msg, type }]);
     };
 
+    const handleMicroSipCall = () => {
+        if (!selectedLinha) {
+            addLog('Selecione uma linha para discar.', 'error');
+            return;
+        }
+        const linhaObj = linhas.find(l => l.id === selectedLinha);
+        if (!linhaObj) return;
+
+        const numero = linhaObj.numero.replace(/\D/g, '');
+        // Abre o link sip: para invocar o MicroSIP nativo da máquina do usuário
+        window.location.href = `sip:${numero}`;
+        addLog(`Comando enviado ao S.O. para abrir MicroSIP discando para: ${numero}`, 'info');
+    };
+
     const handleExecuteTest = async () => {
         if (!selectedLinha) {
             addLog('Selecione uma linha antes de iniciar o teste.', 'error');
@@ -96,23 +110,33 @@ export function TesteLinhaModal({ isOpen, onClose }) {
                     >
                         Fechar
                     </button>
-                    <button
-                        onClick={handleExecuteTest}
-                        disabled={!selectedLinha || isTesting}
-                        className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        {isTesting ? (
-                            <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Testando...
-                            </>
-                        ) : (
-                            <>
-                                <PhoneForwarded className="w-4 h-4" />
-                                Executar Teste
-                            </>
-                        )}
-                    </button>
+                    <div className="flex gap-3">
+                        <button
+                            onClick={handleMicroSipCall}
+                            disabled={!selectedLinha || isTesting}
+                            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <Phone className="w-4 h-4" />
+                            Abrir MicroSIP Local
+                        </button>
+                        <button
+                            onClick={handleExecuteTest}
+                            disabled={!selectedLinha || isTesting}
+                            className="flex items-center gap-2 px-6 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            {isTesting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Testando...
+                                </>
+                            ) : (
+                                <>
+                                    <PhoneForwarded className="w-4 h-4" />
+                                    Executar Teste (PABX)
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
             }
         >

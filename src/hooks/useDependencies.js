@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { convertToCamel } from '../lib/utils';
+import { convertToCamel, toSnake } from '../lib/utils';
 
 /**
  * Hook customizado para carregar de forma paralela multiplas dependências (ex: unidades, linhas, uras).
@@ -22,12 +22,12 @@ export function useDependencies(tables = [], trigger = true) {
                         .select(table.columns || 'id, nome');
 
                     if (table.order) {
-                        query = query.order(table.order.column, { ascending: table.order.ascending !== false });
+                        query = query.order(toSnake(table.order.column), { ascending: table.order.ascending !== false });
                     }
 
                     const { data, error } = await query;
                     if (error) throw error;
-                    return { key: table.tableName, data: data || [] };
+                    return { key: table.tableName, data: convertToCamel(data || []) };
                 });
 
                 const results = await Promise.all(promises);

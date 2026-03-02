@@ -24,7 +24,9 @@ export function LinesView() {
         const lowerTerm = searchTerm.toLowerCase();
         return lines.filter(line =>
             line.numero?.toLowerCase().includes(lowerTerm) ||
-            line.operadora?.toLowerCase().includes(lowerTerm)
+            line.operadora?.toLowerCase().includes(lowerTerm) ||
+            line.status?.toLowerCase().includes(lowerTerm) ||
+            line.unidades?.nome?.toLowerCase().includes(lowerTerm)
         );
     }, [lines, searchTerm]);
 

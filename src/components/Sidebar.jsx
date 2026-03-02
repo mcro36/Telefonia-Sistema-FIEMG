@@ -38,7 +38,7 @@ export function Sidebar({ activeTab, setActiveTab }) {
                     <Phone className="w-8 h-8" />
                 </div>
                 <div>
-                    <h1 className="text-slate-900 dark:text-white text-base font-bold leading-tight">Telefonia Sistema FIEMG</h1>
+                    <h1 className="text-slate-900 dark:text-white text-base font-bold leading-tight">Inventário de telefonia</h1>
                     <p className="text-slate-500 dark:text-slate-400 text-xs">
                         {activeTab === 'projects' ? 'Gerenciamento de Projetos' : 'Admin Console'}
                     </p>

@@ -4,8 +4,8 @@ import {
     PhoneCall,
     Cpu,
     TrendingUp,
-    Search,
-    Download
+    TrendingDown,
+    Users
 } from 'lucide-react';
 import {
     AreaChart,
@@ -16,18 +16,8 @@ import {
     Tooltip,
     ResponsiveContainer
 } from 'recharts';
-import { useSupabaseTable } from '../hooks/useSupabaseTable';
-import { supabase } from '../lib/supabase';
-import { convertToCamel } from '../lib/utils';
-
-const data = [
-    { name: 'Jan', value: 400 },
-    { name: 'Fev', value: 300 },
-    { name: 'Mar', value: 600 },
-    { name: 'Abr', value: 800 },
-    { name: 'Mai', value: 500 },
-    { name: 'Jun', value: 900 },
-];
+import { supabase } from '../lib/supabase.js';
+import { convertToCamel } from '../lib/utils.js';
 
 export function DashboardView() {
     const [stats, setStats] = React.useState([
@@ -37,6 +27,8 @@ export function DashboardView() {
     ]);
 
     const [regions, setRegions] = React.useState([]);
+    const [chartData, setChartData] = React.useState([]);
+    const [chartGrowth, setChartGrowth] = React.useState(null);
 
     React.useEffect(() => {
         async function loadDashboardData() {
@@ -64,13 +56,52 @@ export function DashboardView() {
                         { label: 'Ramais SIP Ativos', value: sipCount?.toString() || '0', icon: PhoneCall, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
                         { label: 'Linhas', value: linhasCount?.toString() || '0', icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10' },
                     ]);
-                } else {
-                    console.error("Dashboard dataload count errors:", uErr, sErr, lErr);
                 }
 
-                // 4. Distribution by city (Simulating Ramais por Região)
-                const { data: unitsData } = await supabase.from('unidades').select('id, cidade');
-                const { data: ramaisData, error: ramaisDataErr } = await supabase.from('ramais').select('unidadeId');
+                // 4. Gráfico: Ramais cadastrados por mês (últimos 6 meses)
+                const { data: ramaisAllDatesRaw } = await supabase.from('ramais').select('created_at');
+                const ramaisAllDates = convertToCamel(ramaisAllDatesRaw);
+                if (ramaisAllDates) {
+                    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                    const monthlyCounts = {};
+                    const now = new Date();
+
+                    // Inicializar últimos 6 meses
+                    for (let i = 5; i >= 0; i--) {
+                        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        monthlyCounts[key] = { name: monthNames[d.getMonth()], value: 0 };
+                    }
+
+                    ramaisAllDates.forEach(r => {
+                        if (!r.createdAt) return;
+                        const d = new Date(r.createdAt);
+                        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        if (monthlyCounts[key]) {
+                            monthlyCounts[key].value += 1;
+                        }
+                    });
+
+                    const sortedData = Object.values(monthlyCounts);
+                    setChartData(sortedData);
+
+                    // Calcular crescimento mês-a-mês
+                    if (sortedData.length >= 2) {
+                        const prev = sortedData[sortedData.length - 2].value;
+                        const curr = sortedData[sortedData.length - 1].value;
+                        if (prev > 0) {
+                            const pct = (((curr - prev) / prev) * 100).toFixed(1);
+                            setChartGrowth(pct);
+                        }
+                    }
+                }
+
+                // 5. Ramais por Região (cidade)
+                const { data: unitsDataRaw } = await supabase.from('unidades').select('id, cidade');
+                const { data: ramaisDataRaw } = await supabase.from('ramais').select('unidade_id');
+
+                const unitsData = convertToCamel(unitsDataRaw);
+                const ramaisData = convertToCamel(ramaisDataRaw);
 
                 if (unitsData) {
                     const unitCityMap = {};
@@ -81,30 +112,25 @@ export function DashboardView() {
                     const regionCounts = {};
                     let totalRamais = 0;
 
-                    const processExtensions = (extData) => {
-                        if (!extData) return;
-                        extData.forEach(e => {
-                            // modelagem camelCase ou convertida
-                            const uId = e.unidadeId || e.unidade_id;
+                    if (ramaisData) {
+                        ramaisData.forEach(e => {
+                            const uId = e.unidadeId;
                             if (uId && unitCityMap[uId]) {
                                 const city = unitCityMap[uId];
                                 regionCounts[city] = (regionCounts[city] || 0) + 1;
                                 totalRamais++;
                             }
                         });
-                    };
+                    }
 
-                    processExtensions(ramaisData);
-
-                    // Ordenar regiões pelas do maior para o menor e injetar total
                     const sortedRegions = Object.keys(regionCounts)
                         .map(city => ({
                             label: city,
                             value: regionCounts[city],
-                            total: totalRamais > 0 ? totalRamais : 1 // prevent div zero
+                            total: totalRamais > 0 ? totalRamais : 1
                         }))
                         .sort((a, b) => b.value - a.value)
-                        .slice(0, 5); // top 5
+                        .slice(0, 5);
 
                     setRegions(sortedRegions);
                 }
@@ -123,20 +149,6 @@ export function DashboardView() {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Visão Geral</h1>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Monitoramento em tempo real do sistema de telefonia.</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-400 w-4 h-4" />
-                        <input
-                            className="h-10 rounded-lg border border-slate-200 dark:border-0 bg-white dark:bg-[#1c1f26] pl-10 pr-4 text-sm text-slate-900 dark:text-white ring-1 ring-inset ring-transparent dark:ring-slate-800 placeholder:text-slate-500 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500 w-64 shadow-sm"
-                            placeholder="Buscar ramal ou unidade..."
-                            type="text"
-                        />
-                    </div>
-                    <button className="flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 transition-colors shadow-sm">
-                        <Download className="w-4 h-4" />
-                        <span>Relatório</span>
-                    </button>
                 </div>
             </header>
 
@@ -158,17 +170,19 @@ export function DashboardView() {
                 <div className="lg:col-span-2 bg-white dark:bg-[#1c1f26] p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Uso de Ramais SIP por Mês</h3>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">Volume de chamadas nos últimos 6 meses</p>
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Ramais Cadastrados por Mês</h3>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">Volume de registros nos últimos 6 meses</p>
                         </div>
-                        <div className="flex items-center gap-2 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400">
-                            <TrendingUp className="w-3 h-3" />
-                            +5.2%
-                        </div>
+                        {chartGrowth !== null && (
+                            <div className={`flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-medium ${Number(chartGrowth) >= 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                <TrendingUp className="w-3 h-3" />
+                                {Number(chartGrowth) >= 0 ? '+' : ''}{chartGrowth}%
+                            </div>
+                        )}
                     </div>
                     <div className="h-64 w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={data}>
+                            <AreaChart data={chartData}>
                                 <defs>
                                     <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />

@@ -1,7 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ChevronDown, Ticket, Package, MessageSquarePlus, CheckCircle, Search, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronDown, Ticket, Package, MessageSquarePlus, CheckCircle, Search, Loader2, Building2, Plus, AlertCircle } from 'lucide-react';
 import { useSupabaseTable } from '../hooks/useSupabaseTable.js';
 import { supabase } from '../lib/supabase.js';
+import { convertToCamel } from '../lib/utils.js';
+import { FormSearchableSelect } from './ui/FormField.jsx';
+import { RamalModalSIP } from './RamalModalSIP.jsx';
+import { LinhaModal } from './LinhaModal.jsx';
+import { UraModal } from './UraModal.jsx';
 
 export function CadastroProjetoView({ onCancel }) {
     const { data: units, isLoading: isUnitsLoading } = useSupabaseTable({
@@ -11,24 +16,48 @@ export function CadastroProjetoView({ onCancel }) {
     });
 
     const [selectedUnit, setSelectedUnit] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    // Campos do formulário
+    const [projectName, setProjectName] = useState('');
+    const [projectDesc, setProjectDesc] = useState('');
+    const [dataInicio, setDataInicio] = useState('');
+    const [deadline, setDeadline] = useState('');
+    const [chamado, setChamado] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
     const [unitItems, setUnitItems] = useState({ ramais: [], linhas: [], uras: [] });
     const [isLoadingItems, setIsLoadingItems] = useState(false);
 
     const [selectedItemIds, setSelectedItemIds] = useState(new Set());
-    const dropdownRef = useRef(null);
+    const [activeDraftModal, setActiveDraftModal] = useState(null);
+    const [filterType, setFilterType] = useState('todos'); // 'todos', 'ramal', 'linha', 'ura'
 
-    useEffect(() => {
-        function handleClickOutside(event) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setIsDropdownOpen(false);
-            }
+    const handleAddDraftItem = (itemData, type) => {
+        const tempId = `temp_${Date.now()}`;
+        const finalItem = { ...itemData, id: tempId, isDraft: true };
+
+        let newItems = { ...unitItems };
+        let itemIdString = '';
+
+        if (type === 'ramal') {
+            newItems.ramais = [...newItems.ramais, finalItem];
+            itemIdString = `ramal_${tempId}`;
+        } else if (type === 'linha') {
+            newItems.linhas = [...newItems.linhas, finalItem];
+            itemIdString = `linha_${tempId}`;
+        } else if (type === 'ura') {
+            newItems.uras = [...newItems.uras, finalItem];
+            itemIdString = `ura_${tempId}`;
         }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+
+        setUnitItems(newItems);
+
+        const newSelectedIds = new Set(selectedItemIds);
+        newSelectedIds.add(itemIdString);
+        setSelectedItemIds(newSelectedIds);
+
+        setActiveDraftModal(null);
+    };
 
     useEffect(() => {
         if (!selectedUnit) {
@@ -40,21 +69,25 @@ export function CadastroProjetoView({ onCancel }) {
             setIsLoadingItems(true);
             try {
                 const [ramaisRes, linhasRes, urasRes] = await Promise.all([
-                    supabase.from('ramais').select('id, numero, setor, tipo_ramal').eq('unidade_id', selectedUnit.id),
-                    supabase.from('linhas').select('id, numero, operadora').eq('unidade_id', selectedUnit.id),
+                    supabase.from('ramais').select('id, numero, setor, tipo_ramal').eq('unidade_id', selectedUnit.id).eq('status', 'Ativo'),
+                    supabase.from('linhas').select('id, numero, operadora').eq('unidade_id', selectedUnit.id).eq('status', 'Ativa'),
                     supabase.from('uras').select('id, nome, descricao').eq('unidade_id', selectedUnit.id)
                 ]);
 
+                const ramais = convertToCamel(ramaisRes.data || []);
+                const linhas = convertToCamel(linhasRes.data || []);
+                const uras = convertToCamel(urasRes.data || []);
+
                 setUnitItems({
-                    ramais: ramaisRes.data || [],
-                    linhas: linhasRes.data || [],
-                    uras: urasRes.data || []
+                    ramais,
+                    linhas,
+                    uras
                 });
 
                 const allIds = new Set([
-                    ...(ramaisRes.data || []).map(r => `ramal_${r.id}`),
-                    ...(linhasRes.data || []).map(l => `linha_${l.id}`),
-                    ...(urasRes.data || []).map(u => `ura_${u.id}`)
+                    ...ramais.map(r => `ramal_${r.id}`),
+                    ...linhas.map(l => `linha_${l.id}`),
+                    ...uras.map(u => `ura_${u.id}`)
                 ]);
                 setSelectedItemIds(allIds);
 
@@ -94,6 +127,80 @@ export function CadastroProjetoView({ onCancel }) {
     const totalItems = unitItems.ramais.length + unitItems.linhas.length + unitItems.uras.length;
     const isAllSelected = totalItems > 0 && selectedItemIds.size === totalItems;
 
+    const handleCreateProject = async () => {
+        if (!projectName.trim()) {
+            alert('Por favor, preencha o nome do projeto.');
+            return;
+        }
+        if (!selectedUnit) {
+            alert('Por favor, selecione uma unidade.');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            // 1. Criar o projeto
+            const { data: projetoData, error: projetoError } = await supabase
+                .from('projetos')
+                .insert([{
+                    nome: projectName.trim(),
+                    descricao: projectDesc.trim() || null,
+                    unidade_id: selectedUnit.id,
+                    data_inicio: dataInicio || null,
+                    deadline: deadline || null,
+                    chamado: chamado.trim() || null,
+                    progresso: 0,
+                    status: 'Em Andamento'
+                }])
+                .select('id')
+                .single();
+
+            if (projetoError) throw projetoError;
+
+            // 2. Criar os itens selecionados
+            const itensToInsert = [];
+            selectedItemIds.forEach(itemIdStr => {
+                const [tipo, rawId] = itemIdStr.split('_');
+                const isDraft = String(rawId).startsWith('temp_');
+                let label = '';
+
+                if (tipo === 'ramal') {
+                    const r = unitItems.ramais.find(x => String(x.id) === rawId);
+                    label = r ? `Ramal ${r.numero}` : `Ramal (${rawId})`;
+                } else if (tipo === 'linha') {
+                    const l = unitItems.linhas.find(x => String(x.id) === rawId);
+                    label = l ? `Linha ${l.numero}` : `Linha (${rawId})`;
+                } else if (tipo === 'ura') {
+                    const u = unitItems.uras.find(x => String(x.id) === rawId);
+                    label = u ? `URA ${u.nome}` : `URA (${rawId})`;
+                }
+
+                itensToInsert.push({
+                    projeto_id: projetoData.id,
+                    item_tipo: tipo,
+                    item_id: isDraft ? null : rawId,
+                    item_label: label,
+                    status_item: 'Agendado'
+                });
+            });
+
+            if (itensToInsert.length > 0) {
+                const { error: itensError } = await supabase
+                    .from('projeto_itens')
+                    .insert(itensToInsert);
+                if (itensError) throw itensError;
+            }
+
+            alert('Projeto criado com sucesso!');
+            onCancel();
+        } catch (err) {
+            console.error('Erro ao criar projeto:', err);
+            alert('Erro ao criar projeto: ' + (err.message || 'Verifique sua conexão.'));
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
         <div className="flex flex-col h-full animate-in slide-in-from-right duration-300 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
@@ -108,54 +215,21 @@ export function CadastroProjetoView({ onCancel }) {
                                     className="w-full bg-white dark:bg-[#111621] border border-slate-200 dark:border-slate-800 rounded-lg h-12 px-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 transition-all outline-none"
                                     placeholder="Ex: Upgrade de Infraestrutura 2024"
                                     type="text"
+                                    value={projectName}
+                                    onChange={(e) => setProjectName(e.target.value)}
                                 />
                             </div>
 
                             <div className="space-y-2">
                                 <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Unidade Alvo</label>
-                                <div className="relative" ref={dropdownRef}>
-                                    <div
-                                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                        className="w-full bg-white dark:bg-[#111621] border border-slate-200 dark:border-slate-800 rounded-lg h-12 px-4 flex items-center justify-between cursor-pointer focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all"
-                                    >
-                                        <span className={selectedUnit ? "text-slate-900 dark:text-white" : "text-slate-400 dark:text-slate-500"}>
-                                            {selectedUnit ? selectedUnit.nome : 'Selecione a unidade'}
-                                        </span>
-                                        <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
-                                    </div>
-
-                                    {isDropdownOpen && (
-                                        <div className="absolute z-20 w-full mt-2 bg-white dark:bg-[#111621] border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2">
-                                            <div className="p-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2">
-                                                <Search className="w-4 h-4 text-slate-400 ml-2 shrink-0" />
-                                                <input
-                                                    type="text"
-                                                    className="w-full bg-transparent border-none focus:ring-0 text-sm dark:text-white outline-none"
-                                                    placeholder="Buscar unidade..."
-                                                    value={searchTerm}
-                                                    onChange={e => setSearchTerm(e.target.value)}
-                                                />
-                                            </div>
-                                            <ul className="max-h-60 overflow-y-auto custom-scrollbar p-1">
-                                                {isUnitsLoading ? (
-                                                    <li className="p-4 text-center text-slate-500 text-sm">Carregando...</li>
-                                                ) : units.filter(u => u.nome.toLowerCase().includes(searchTerm.toLowerCase())).length === 0 ? (
-                                                    <li className="p-4 text-center text-slate-500 text-sm">Nenhuma unidade encontrada.</li>
-                                                ) : (
-                                                    units.filter(u => u.nome.toLowerCase().includes(searchTerm.toLowerCase())).map(u => (
-                                                        <li
-                                                            key={u.id}
-                                                            onClick={() => { setSelectedUnit(u); setIsDropdownOpen(false); setSearchTerm(''); }}
-                                                            className={`p-3 text-sm rounded-md cursor-pointer transition-colors ${selectedUnit?.id === u.id ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
-                                                        >
-                                                            {u.nome}
-                                                        </li>
-                                                    ))
-                                                )}
-                                            </ul>
-                                        </div>
-                                    )}
-                                </div>
+                                <FormSearchableSelect
+                                    id="unidade-projeto-select"
+                                    icon={<Building2 className="w-5 h-5" />}
+                                    placeholder={isUnitsLoading ? "Carregando unidades..." : "Selecione ou busque uma unidade..."}
+                                    value={selectedUnit ? selectedUnit.id : ''}
+                                    onChange={(val) => setSelectedUnit(units.find(u => String(u.id) === String(val)))}
+                                    options={(units || []).map(u => ({ value: u.id, label: u.nome }))}
+                                />
                             </div>
                         </div>
 
@@ -165,7 +239,9 @@ export function CadastroProjetoView({ onCancel }) {
                                 <input
                                     className="w-full bg-white dark:bg-[#111621] border border-slate-200 dark:border-slate-800 rounded-lg h-12 px-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-white outline-none transition-all"
                                     type="date"
-                                    style={{ colorScheme: 'dark' }} // Para forçar calendário com estilo dark se suportado pelo browser
+                                    value={dataInicio}
+                                    onChange={(e) => setDataInicio(e.target.value)}
+                                    style={{ colorScheme: 'dark' }}
                                 />
                             </div>
                             <div className="space-y-2">
@@ -173,6 +249,8 @@ export function CadastroProjetoView({ onCancel }) {
                                 <input
                                     className="w-full bg-white dark:bg-[#111621] border border-slate-200 dark:border-slate-800 rounded-lg h-12 px-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-white outline-none transition-all"
                                     type="date"
+                                    value={deadline}
+                                    onChange={(e) => setDeadline(e.target.value)}
                                     style={{ colorScheme: 'dark' }}
                                 />
                             </div>
@@ -183,6 +261,8 @@ export function CadastroProjetoView({ onCancel }) {
                                         className="w-full bg-white dark:bg-[#111621] border border-slate-200 dark:border-slate-800 rounded-lg h-12 pl-4 pr-10 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 outline-none transition-all"
                                         placeholder="ID do chamado no Service Desk"
                                         type="text"
+                                        value={chamado}
+                                        onChange={(e) => setChamado(e.target.value)}
                                     />
                                     <Ticket className="absolute right-3 top-3.5 w-5 h-5 text-slate-400 pointer-events-none" />
                                 </div>
@@ -199,6 +279,22 @@ export function CadastroProjetoView({ onCancel }) {
                                     Itens da Unidade
                                 </h3>
                                 <div className="flex items-center gap-4">
+                                    <div className="flex gap-2 relative group hidden sm:flex">
+                                        <button className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-[#111621] border border-slate-200 dark:border-slate-700 rounded-md text-sm font-medium text-slate-700 dark:text-slate-300 hover:text-blue-600 hover:border-blue-200 dark:hover:text-blue-400 transition-colors">
+                                            <Plus className="w-4 h-4" /> Incluir
+                                        </button>
+                                        <div className="absolute right-0 top-full w-48 bg-white dark:bg-[#1c222d] border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-20 overflow-hidden">
+                                            <button onClick={() => setActiveDraftModal('ramal')} className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#151a23] transition-colors border-b border-slate-100 dark:border-slate-800/60">
+                                                Novo ramal
+                                            </button>
+                                            <button onClick={() => setActiveDraftModal('linha')} className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#151a23] transition-colors border-b border-slate-100 dark:border-slate-800/60">
+                                                Nova linha
+                                            </button>
+                                            <button onClick={() => setActiveDraftModal('ura')} className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-[#151a23] transition-colors">
+                                                Nova URA
+                                            </button>
+                                        </div>
+                                    </div>
                                     <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                                         <input
                                             className="rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111621] cursor-pointer text-blue-600 focus:ring-blue-500"
@@ -210,6 +306,22 @@ export function CadastroProjetoView({ onCancel }) {
                                         <label className="cursor-pointer font-medium hover:text-slate-700 dark:hover:text-slate-300" htmlFor="selectAll">Selecionar Todos</label>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* Filtros */}
+                            <div className="px-6 py-2 border-b border-slate-200 dark:border-slate-800 flex items-center gap-2 flex-wrap">
+                                {['todos', 'ramal', 'linha', 'ura'].map(f => (
+                                    <button
+                                        key={f}
+                                        onClick={() => setFilterType(f)}
+                                        className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${filterType === f
+                                            ? 'bg-blue-600 text-white shadow-sm'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                            }`}
+                                    >
+                                        {f === 'todos' ? `Todos (${totalItems})` : f === 'ramal' ? `Ramais (${unitItems.ramais.length})` : f === 'linha' ? `Linhas (${unitItems.linhas.length})` : `URAs (${unitItems.uras.length})`}
+                                    </button>
+                                ))}
                             </div>
 
                             <div className="divide-y divide-slate-200 dark:divide-slate-800 max-h-[450px] overflow-y-auto custom-scrollbar relative">
@@ -227,7 +339,7 @@ export function CadastroProjetoView({ onCancel }) {
                                         )}
 
                                         {/* Ramais */}
-                                        {unitItems.ramais.map(ramal => (
+                                        {(filterType === 'todos' || filterType === 'ramal') && unitItems.ramais.map(ramal => (
                                             <div key={`ramal_${ramal.id}`} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                                                 <div className="flex items-start md:items-center gap-4">
                                                     <input
@@ -239,6 +351,7 @@ export function CadastroProjetoView({ onCancel }) {
                                                     <div className="flex flex-col">
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-sm font-bold text-slate-900 dark:text-slate-100">Ramal {ramal.numero}</span>
+                                                            {ramal.isDraft && <span className="text-[10px] ml-1 uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">RASCUNHO</span>}
                                                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50">RAMAL</span>
                                                         </div>
                                                         <span className="text-xs text-slate-500 dark:text-slate-400">{ramal.setor || 'Sem setor associado'}</span>
@@ -263,7 +376,7 @@ export function CadastroProjetoView({ onCancel }) {
                                         ))}
 
                                         {/* Linhas */}
-                                        {unitItems.linhas.map(linha => (
+                                        {(filterType === 'todos' || filterType === 'linha') && unitItems.linhas.map(linha => (
                                             <div key={`linha_${linha.id}`} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                                                 <div className="flex items-start md:items-center gap-4">
                                                     <input
@@ -275,6 +388,7 @@ export function CadastroProjetoView({ onCancel }) {
                                                     <div className="flex flex-col">
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{linha.numero}</span>
+                                                            {linha.isDraft && <span className="text-[10px] ml-1 uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">RASCUNHO</span>}
                                                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-400 border border-purple-200 dark:border-purple-800/50">LINHA</span>
                                                         </div>
                                                         <span className="text-xs text-slate-500 dark:text-slate-400">{linha.operadora || 'Operadora Padrão'}</span>
@@ -299,7 +413,7 @@ export function CadastroProjetoView({ onCancel }) {
                                         ))}
 
                                         {/* URAs */}
-                                        {unitItems.uras.map(ura => (
+                                        {(filterType === 'todos' || filterType === 'ura') && unitItems.uras.map(ura => (
                                             <div key={`ura_${ura.id}`} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                                                 <div className="flex items-start md:items-center gap-4">
                                                     <input
@@ -311,6 +425,7 @@ export function CadastroProjetoView({ onCancel }) {
                                                     <div className="flex flex-col">
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{ura.nome}</span>
+                                                            {ura.isDraft && <span className="text-[10px] ml-1 uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">RASCUNHO</span>}
                                                             <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50">URA</span>
                                                         </div>
                                                         <span className="text-xs text-slate-500 dark:text-slate-400">{ura.descricao || 'Sem descrição'}</span>
@@ -347,13 +462,54 @@ export function CadastroProjetoView({ onCancel }) {
                         >
                             Cancelar
                         </button>
-                        <button className="px-8 py-3 rounded-lg font-bold bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20 flex items-center gap-2 transition-all active:scale-95">
-                            <CheckCircle className="w-5 h-5" />
-                            Criar Projeto
+                        <button
+                            onClick={handleCreateProject}
+                            disabled={isSaving}
+                            className="px-8 py-3 rounded-lg font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-600/20 flex items-center gap-2 transition-all active:scale-95"
+                        >
+                            {isSaving ? (
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Salvando...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle className="w-5 h-5" />
+                                    Criar Projeto
+                                </>
+                            )}
                         </button>
                     </div>
 
                 </div>
+
+                {activeDraftModal === 'ramal' && (
+                    <RamalModalSIP
+                        isOpen={true}
+                        onClose={() => setActiveDraftModal(null)}
+                        unitId={selectedUnit?.id}
+                        draftMode={true}
+                        onDraftSubmit={(data) => handleAddDraftItem(data, 'ramal')}
+                    />
+                )}
+                {activeDraftModal === 'linha' && (
+                    <LinhaModal
+                        isOpen={true}
+                        onClose={() => setActiveDraftModal(null)}
+                        unitId={selectedUnit?.id}
+                        draftMode={true}
+                        onDraftSubmit={(data) => handleAddDraftItem(data, 'linha')}
+                    />
+                )}
+                {activeDraftModal === 'ura' && (
+                    <UraModal
+                        isOpen={true}
+                        onClose={() => setActiveDraftModal(null)}
+                        unitId={selectedUnit?.id}
+                        draftMode={true}
+                        onDraftSubmit={(data) => handleAddDraftItem(data, 'ura')}
+                    />
+                )}
             </div>
         </div>
     );

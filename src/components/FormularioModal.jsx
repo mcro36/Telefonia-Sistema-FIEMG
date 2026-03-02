@@ -386,9 +386,9 @@ export function FormularioModal({ isOpen, onClose }) {
                                                 <tr key={idx} className="hover:bg-slate-50/50 dark:hover:bg-[#151a23] transition-colors">
                                                     <td className="px-6 py-4">
                                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${item.type === 'ramal' ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400' :
-                                                                item.type === 'linha' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
-                                                                    item.type === 'ura' ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400' :
-                                                                        'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
+                                                            item.type === 'linha' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' :
+                                                                item.type === 'ura' ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400' :
+                                                                    'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400'
                                                             }`}>
                                                             {item.type}
                                                         </span>

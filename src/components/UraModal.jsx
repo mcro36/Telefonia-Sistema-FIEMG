@@ -25,7 +25,7 @@ export function UraModal({ isOpen, onClose, onSave, uraToEdit, unitId, draftMode
 
     useEffect(() => {
         if (isOpen) {
-            setErrors({ nome: false, linha_id: false });
+            setErrors({ nome: false, linhaId: false });
 
             if (uraToEdit) {
                 setFormData({

@@ -23,11 +23,11 @@ export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
     const [errors, setErrors] = useState({ nome: false, numero: false, recursoPabxId: false, tipoRamal: false });
 
     const { dependencies, isLoading } = useDependencies([
-        { tableName: 'unidades', columns: 'id, nome, "faixaRamais"', order: { column: 'nome' } },
+        { tableName: 'unidades', columns: 'id, nome, faixa_ramais', order: { column: 'nome' } },
         { tableName: 'linhas', columns: 'id, numero', order: { column: 'numero' } },
         { tableName: 'uras', columns: 'id, nome', order: { column: 'nome' } },
         { tableName: 'recursos_pabx', columns: '*' },
-        { tableName: 'ramais', columns: 'id, numero, "recursoPabxId"' }
+        { tableName: 'ramais', columns: 'id, numero, recurso_pabx_id' }
     ], isOpen);
 
     const unidades = dependencies.unidades || [];
@@ -78,7 +78,7 @@ export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
                 prefix = 'RBA_';
             }
 
-            const label = `${prefix}B${rec.bloco}_P${rec.porta}_${(rec.tecnologia_padrao || 'Analogico').toUpperCase()}`;
+            const label = `${prefix}B${rec.bloco}_P${rec.porta}_${(rec.tecnologiaPadrao || 'Analogico').toUpperCase()}`;
 
             return {
                 value: rec.id,
@@ -97,7 +97,7 @@ export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
                 blocoVp: rec.bloco,
                 parPorta: rec.porta,
                 pen: rec.pen,
-                tipoRamal: rec.tecnologia_padrao?.toLowerCase() === 'digital' ? 'digital' : 'analogico'
+                tipoRamal: rec.tecnologiaPadrao?.toLowerCase() === 'digital' ? 'digital' : 'analogico'
             });
         } else {
             setFormData({

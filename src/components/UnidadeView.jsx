@@ -21,28 +21,38 @@ export function UnidadeView() {
     const filteredUnits = useMemo(() => {
         if (!searchTerm) return units;
         const lowerTerm = searchTerm.toLowerCase();
-        return units.filter(unit =>
-            unit.nome?.toLowerCase().includes(lowerTerm) ||
-            unit.cidade?.toLowerCase().includes(lowerTerm) ||
-            unit.entidade?.toLowerCase().includes(lowerTerm) ||
-            unit.faixaRamais?.includes(lowerTerm)
-        );
+        const numericTerm = parseInt(searchTerm.trim());
+
+        return units.filter(unit => {
+            if (
+                unit.nome?.toLowerCase().includes(lowerTerm) ||
+                unit.cidade?.toLowerCase().includes(lowerTerm) ||
+                unit.entidade?.toLowerCase().includes(lowerTerm) ||
+                unit.faixaRamais?.toLowerCase().includes(lowerTerm)
+            ) return true;
+
+            if (!isNaN(numericTerm) && unit.faixaRamais) {
+                const parts = unit.faixaRamais.split('-').map(p => parseInt(p.trim()));
+                if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                    if (numericTerm >= parts[0] && numericTerm <= parts[1]) return true;
+                }
+            }
+
+            return false;
+        });
     }, [units, searchTerm]);
 
     const [ramaisPerUnit, setRamaisPerUnit] = useState({});
     const [linhasPerUnit, setLinhasPerUnit] = useState({});
 
-    // Fetch extensions and lines to calculate active usage per unit
     React.useEffect(() => {
         async function fetchCounts() {
             if (!units || units.length === 0) return;
             try {
-                const { data: pabxData, error: pabxErr } = await supabase.from('ramais_pabx').select('unidade_id');
-                const { data: sipData, error: sipErr } = await supabase.from('ramais_sip').select('unidade_id');
-                const { data: linhasData, error: linhasErr } = await supabase.from('linhas').select('unidade_id');
+                const { data: ramaisData, error: ramaisErr } = await supabase.from('ramais').select('unidade_id').eq('status', 'Ativo');
+                const { data: linhasData, error: linhasErr } = await supabase.from('linhas').select('unidade_id').eq('status', 'Ativa');
 
-                if (pabxErr) console.warn("Could not fetch PABX extensions for counts", pabxErr);
-                if (sipErr) console.warn("Could not fetch SIP extensions for counts", sipErr);
+                if (ramaisErr) console.warn("Could not fetch extensions for counts", ramaisErr);
                 if (linhasErr) console.warn("Could not fetch lines for counts", linhasErr);
 
                 const countRamais = {};
@@ -58,8 +68,7 @@ export function UnidadeView() {
                     });
                 };
 
-                processData(pabxData, countRamais);
-                processData(sipData, countRamais);
+                processData(ramaisData, countRamais);
                 processData(linhasData, countLinhas);
 
                 setRamaisPerUnit(countRamais);
@@ -78,7 +87,7 @@ export function UnidadeView() {
         if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
             return parts[1] - parts[0] + 1;
         }
-        return 0; // Invalid or missing range
+        return 0;
     };
 
     async function handleSaveUnit(unitData) {
@@ -86,23 +95,13 @@ export function UnidadeView() {
         if (result.success) {
             setIsModalOpen(false);
             setUnitToEdit(null);
-        } else {
-            // Fallback for demo
-            if (unitData.id) {
-                setUnits(units.map(u => u.id === unitData.id ? unitData : u));
-            } else {
-                setUnits([...units, { ...unitData, id: Math.random().toString() }]);
-            }
-            setIsModalOpen(false);
-            setUnitToEdit(null);
         }
     }
 
     async function handleDeleteUnit(id) {
         if (!window.confirm("Atenção: Tem certeza que deseja excluir esta unidade?")) return;
-
         const result = await deleteRecord(id);
-        if (!result.success) {
+        if (result.success) {
             setUnits(units.filter(u => u.id !== id));
         }
     }
@@ -260,7 +259,7 @@ export function UnidadeView() {
                         ))}
                         {filteredUnits.length === 0 && (
                             <tr>
-                                <td colSpan="5" className="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                                <td colSpan="7" className="px-6 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
                                     Nenhuma unidade encontrada.
                                 </td>
                             </tr>
@@ -274,6 +273,7 @@ export function UnidadeView() {
                 onClose={() => setIsModalOpen(false)}
                 onSave={handleSaveUnit}
                 unitToEdit={unitToEdit}
+                units={units}
             />
         </div>
     );

@@ -27,7 +27,7 @@ export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit, unitId, dr
 
     // Fetch dependencies
     const { dependencies, isLoading } = useDependencies([
-        { tableName: 'unidades', columns: 'id, nome, "faixaRamais"', order: { column: 'nome' } },
+        { tableName: 'unidades', columns: 'id, nome, faixa_ramais', order: { column: 'nome' } },
         { tableName: 'linhas', columns: 'id, numero', order: { column: 'numero' } },
         { tableName: 'ramais', columns: 'id, numero' }
     ], isOpen);
