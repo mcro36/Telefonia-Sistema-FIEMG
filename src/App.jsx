@@ -16,6 +16,8 @@ import { useAuth } from './contexts/AuthContext.jsx';
 import { User, Settings, ShieldCheck, LogOut, ChevronRight, Key, HeadphonesIcon } from 'lucide-react';
 import { TrocaSenhaModal } from './components/TrocaSenhaModal.jsx';
 import { FormularioModal } from './components/FormularioModal.jsx';
+import { Header } from './components/Header.jsx';
+import { Footer } from './components/Footer.jsx';
 
 export default function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
@@ -165,107 +167,20 @@ export default function App() {
             />
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-                {/* Header */}
-                <header className="h-16 flex items-center justify-between px-8 bg-white dark:bg-[#0a0c10] border-b border-slate-200 dark:border-slate-800 shrink-0 z-50 transition-colors duration-300">
-                    <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-semibold text-slate-900 dark:text-white tracking-tight">
-                            {activeTab === 'dashboard' ? 'Dashboard Geral' :
-                                activeTab === 'units' ? 'Gerenciamento de Unidades' :
-                                    activeTab === 'lines' ? 'Gerenciamento de Linhas' :
-                                        activeTab === 'extensions' ? 'Gerenciamento de Ramais' :
-                                            activeTab === 'ura' ? 'Gerenciamento de URA' :
-                                                activeTab === 'projects' ? (customTitle || 'Gerenciamento de Projetos') :
-                                                    activeTab === 'physical_ports' ? 'Gestão de Portas Físicas' :
-                                                        'Console Administrativo'}
-                        </h2>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={toggleTheme}
-                            className="relative p-2 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-blue-500/10 rounded-full transition-all"
-                            title={`Mudar para modo ${theme === 'dark' ? 'claro' : 'escuro'}`}
-                        >
-                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                        </button>
-                        <button className="relative p-2 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-blue-500/10 rounded-full transition-all">
-                            <Bell className="w-5 h-5" />
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-[#0a0c10]"></span>
-                        </button>
-                        <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1"></div>
-                        <div className="relative" ref={userMenuRef}>
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsUserMenuOpen(prev => !prev);
-                                }}
-                                className="flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-[#111621] p-1.5 rounded-lg transition-colors cursor-pointer"
-                            >
-                                <div className="text-right hidden sm:block">
-                                    <p className="text-sm font-medium text-slate-900 dark:text-white leading-none">{user?.name}</p>
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{hasRole('Administrador') ? 'Administrador' : 'Visualizador'}</p>
-                                </div>
-                                <div className="w-9 h-9 border border-blue-600/30 rounded-full bg-blue-100 dark:bg-[#151c2e] flex items-center justify-center text-blue-600 dark:text-blue-500 font-bold text-sm uppercase shadow-inner">
-                                    {user?.avatarInitials}
-                                </div>
-                            </button>
-
-                            {/* Dropdown Menu */}
-                            <AnimatePresence>
-                                {isUserMenuOpen && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                        transition={{ duration: 0.15 }}
-                                        style={{ zIndex: 99999 }}
-                                        className="absolute right-0 top-14 w-64 bg-white dark:bg-[#151a23] rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden origin-top-right flex flex-col pointer-events-auto"
-                                    >
-                                        <div className="p-2 flex flex-col gap-0.5 mt-1">
-                                            <button
-                                                onClick={() => {
-                                                    setIsUserMenuOpen(false);
-                                                    setIsTrocaSenhaModalOpen(true);
-                                                }}
-                                                className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left"
-                                            >
-                                                <Key className="w-4 h-4 text-slate-400" />
-                                                Trocar Senha
-                                            </button>
-
-                                            {hasRole('Administrador') && (
-                                                <button
-                                                    onClick={() => {
-                                                        setIsUserMenuOpen(false);
-                                                        setIsGerenciamentoModalOpen(true);
-                                                    }}
-                                                    className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left"
-                                                >
-                                                    <ShieldCheck className="w-4 h-4 text-slate-400" />
-                                                    Gerenciamento de Contas
-                                                </button>
-                                            )}
-
-                                            <button className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors text-left">
-                                                <Settings className="w-4 h-4 text-slate-400" />
-                                                Configurações
-                                            </button>
-                                        </div>
-
-                                        <div className="p-2 border-t border-slate-100 dark:border-slate-800/60">
-                                            <button
-                                                onClick={logout}
-                                                className="flex items-center gap-3 w-full p-2.5 text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors text-left"
-                                            >
-                                                <LogOut className="w-4 h-4" />
-                                                Sair do Sistema
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </div>
-                </header>
+                <Header
+                    activeTab={activeTab}
+                    customTitle={customTitle}
+                    toggleTheme={toggleTheme}
+                    theme={theme}
+                    user={user}
+                    hasRole={hasRole}
+                    logout={logout}
+                    isUserMenuOpen={isUserMenuOpen}
+                    setIsUserMenuOpen={setIsUserMenuOpen}
+                    userMenuRef={userMenuRef}
+                    setIsTrocaSenhaModalOpen={setIsTrocaSenhaModalOpen}
+                    setIsGerenciamentoModalOpen={setIsGerenciamentoModalOpen}
+                />
 
                 {/* Content Area */}
                 <div className="flex-1 overflow-y-auto px-8 pt-8 pb-0 custom-scrollbar flex flex-col">
@@ -289,9 +204,7 @@ export default function App() {
                         </AnimatePresence>
                     </div>
 
-                    <footer className="mt-8 pt-4 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500 pb-0 shrink-0">
-                        <p>© 2026 Telefonia SSoT. Todos os direitos reservados.</p>
-                    </footer>
+                    <Footer />
                 </div>
             </main>
 
