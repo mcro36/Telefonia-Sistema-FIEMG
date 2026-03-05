@@ -224,7 +224,10 @@ export function UnidadeModal({ isOpen, onClose, onSave, unitToEdit, units = [] }
                                 ]}
                             />
                         </FormField>
-                        <p className="text-xs text-slate-500 mt-2">Ao selecionar a unidade pai, a faixa de ramais será copiada automaticamente para esta unidade.</p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2 flex items-center gap-1.5 font-medium">
+                            <span className="material-symbols-outlined text-[16px]">info</span>
+                            Ao selecionar a unidade pai, a faixa de ramais será copiada. Alterações futuras no pai atualizarão esta unidade automaticamente.
+                        </p>
                     </motion.div>
                 )}
 

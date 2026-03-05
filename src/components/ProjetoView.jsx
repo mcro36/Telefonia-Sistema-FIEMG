@@ -8,8 +8,10 @@ import autoTable from 'jspdf-autotable';
 import { useSupabaseTable } from '../hooks/useSupabaseTable.js';
 import { supabase } from '../lib/supabase.js';
 import { convertToCamel } from '../lib/utils.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 export function ProjetoView({ setPageTitle }) {
+    const { hasRole } = useAuth();
     const [expandedRows, setExpandedRows] = useState([]);
     const [viewMode, setViewMode] = useState('list'); // 'list' | 'create'
 
@@ -25,6 +27,7 @@ export function ProjetoView({ setPageTitle }) {
     // Edit mode
     const [editingProjetoId, setEditingProjetoId] = useState(null);
     const [editedItems, setEditedItems] = useState({}); // { itemId: { statusItem, observacao } }
+    const [editedProjectStatus, setEditedProjectStatus] = useState({});
     const [editingObsId, setEditingObsId] = useState(null); // item id currently editing observation
     const [tempObs, setTempObs] = useState('');
 
@@ -69,6 +72,7 @@ export function ProjetoView({ setPageTitle }) {
             edits[item.id] = { statusItem: item.statusItem || 'Agendado', observacao: item.observacao || '' };
         });
         setEditedItems(edits);
+        setEditedProjectStatus({ [id]: projetos.find(p => p.id === id)?.status || 'Em Andamento' });
         setEditingProjetoId(id);
     };
 
@@ -117,6 +121,7 @@ export function ProjetoView({ setPageTitle }) {
 
             setEditingProjetoId(null);
             setEditedItems({});
+            setEditedProjectStatus({});
             setEditingObsId(null);
         } catch (err) {
             console.error('Erro ao salvar edições:', err);
@@ -127,6 +132,7 @@ export function ProjetoView({ setPageTitle }) {
     const handleCancelEdit = () => {
         setEditingProjetoId(null);
         setEditedItems({});
+        setEditedProjectStatus({});
         setEditingObsId(null);
     };
 
@@ -152,17 +158,39 @@ export function ProjetoView({ setPageTitle }) {
         }
     };
 
+    const handleApprove = async (id, e) => {
+        e.stopPropagation();
+        if (!window.confirm("Deseja aprovar esta solicitação e iniciar o projeto?")) return;
+        try {
+            await supabase.from('projetos').update({ status: 'Em Andamento' }).eq('id', id);
+            fetchData();
+        } catch (err) {
+            alert('Erro ao aprovar: ' + err.message);
+        }
+    };
+
+    const handleReject = async (id, e) => {
+        e.stopPropagation();
+        if (!window.confirm("Deseja rejeitar e cancelar esta solicitação?")) return;
+        try {
+            await supabase.from('projetos').update({ status: 'Cancelado' }).eq('id', id);
+            fetchData();
+        } catch (err) {
+            alert('Erro ao rejeitar: ' + err.message);
+        }
+    };
+
     if (viewMode === 'create') {
         return <CadastroProjetoView onCancel={() => { setViewMode('list'); fetchData(); }} />;
     }
 
-    // KPIs dinâmicos
     const totalAtivos = projetos.filter(p => p.status === 'Em Andamento').length;
     const totalAtraso = projetos.filter(p => {
         if (!p.deadline) return false;
         return new Date(p.deadline) < new Date() && p.status !== 'Concluído';
     }).length;
     const totalConcluidos = projetos.filter(p => p.status === 'Concluído').length;
+    const totalPendentes = projetos.filter(p => p.status === 'Pendente' || p.status === 'Aguardando').length;
 
     const formatDate = (dateStr) => {
         if (!dateStr) return '—';
@@ -173,15 +201,16 @@ export function ProjetoView({ setPageTitle }) {
     const getStatusBadgeClasses = (status) => {
         switch (status) {
             case 'Em Andamento':
-                return 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400';
+                return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
             case 'Concluído':
                 return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400';
+            case 'Pendente':
             case 'Aguardando':
-                return 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300';
+                return 'bg-amber-100 text-amber-800 dark:bg-amber-700/30 dark:text-amber-300 border border-amber-200 dark:border-amber-700/50';
             case 'Cancelado':
-                return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+                return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-900/50';
             default:
-                return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+                return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-400';
         }
     };
 
@@ -211,7 +240,7 @@ export function ProjetoView({ setPageTitle }) {
         projetos.forEach((p, index) => {
             autoTable(doc, {
                 startY: startY,
-                head: index === 0 ? [['Projeto', 'Progresso', 'Início', 'Deadline', 'Status']] : [],
+                head: index === 0 ? [['Projeto', 'Progresso', 'Início', 'Prazo', 'Status']] : [],
                 body: [
                     [
                         { content: `${p.nome}\n${p.descricao || ''}`, styles: { fontStyle: 'bold' } },
@@ -290,8 +319,8 @@ export function ProjetoView({ setPageTitle }) {
                         <p className="text-2xl font-bold mt-1 text-emerald-500 dark:text-emerald-400">{totalConcluidos}</p>
                     </div>
                     <div className="p-4 rounded-xl bg-white dark:bg-[#1c222d] border border-slate-200 dark:border-slate-800">
-                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Projetos</p>
-                        <p className="text-2xl font-bold mt-1 text-blue-600 dark:text-blue-500">{projetos.length}</p>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pendente de aprovação</p>
+                        <p className="text-2xl font-bold mt-1 text-amber-500 dark:text-amber-400">{totalPendentes}</p>
                     </div>
                 </div>
 
@@ -313,7 +342,7 @@ export function ProjetoView({ setPageTitle }) {
                                         <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Projeto</th>
                                         <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Progresso</th>
                                         <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Início</th>
-                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Deadline</th>
+                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Prazo</th>
                                         <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">Status</th>
                                         <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-800 text-right">Ações</th>
                                     </tr>
@@ -354,22 +383,56 @@ export function ProjetoView({ setPageTitle }) {
                                                 <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400">{formatDate(projeto.dataInicio)}</td>
                                                 <td className="px-6 py-5 text-center text-sm text-slate-600 dark:text-slate-400 font-medium">{formatDate(projeto.deadline)}</td>
                                                 <td className="px-6 py-5 text-center">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClasses(projeto.status)}`}>
-                                                        {projeto.status || 'Em Andamento'}
-                                                    </span>
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClasses(projeto.status)}`}>
+                                                            {projeto.status || 'Em Andamento'}
+                                                        </span>
+                                                        {editingProjetoId === projeto.id && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setViewMode('create'); }}
+                                                                className="p-1 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors"
+                                                                title="Editar Projeto"
+                                                            >
+                                                                <Pencil className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-5 text-right" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center justify-end gap-2">
-                                                        <ProtectedRoute>
-                                                            <button onClick={(e) => handleEdit(projeto.id, e)} className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" title="Editar">
-                                                                <Pencil className="w-5 h-5" />
-                                                            </button>
-                                                        </ProtectedRoute>
-                                                        <ProtectedRoute>
-                                                            <button onClick={(e) => handleDelete(projeto.id, e)} className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors" title="Excluir">
-                                                                <Trash2 className="w-5 h-5" />
-                                                            </button>
-                                                        </ProtectedRoute>
+                                                        {editingProjetoId === projeto.id ? (
+                                                            <>
+                                                                <button onClick={() => handleSaveEdits(projeto.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-white bg-[#00875a] hover:bg-[#00744d] transition-colors" title="Salvar">
+                                                                    <Check className="w-4 h-4" /> <span className="text-sm font-medium leading-none mt-0.5">Salvar</span>
+                                                                </button>
+                                                                <button onClick={handleCancelEdit} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-white bg-[#344054] hover:bg-[#202939] transition-colors" title="Cancelar">
+                                                                    <X className="w-4 h-4" /> <span className="text-sm font-medium leading-none mt-0.5">Cancelar</span>
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                {hasRole('Administrador') && (projeto.status === 'Pendente' || projeto.status === 'Aguardando') && (
+                                                                    <>
+                                                                        <button onClick={(e) => handleApprove(projeto.id, e)} className="p-1.5 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors" title="Aprovar Solicitação">
+                                                                            <Check className="w-5 h-5" />
+                                                                        </button>
+                                                                        <button onClick={(e) => handleReject(projeto.id, e)} className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-colors" title="Rejeitar/Cancelar">
+                                                                            <X className="w-5 h-5" />
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                                <ProtectedRoute>
+                                                                    <button onClick={(e) => handleEdit(projeto.id, e)} className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" title="Editar">
+                                                                        <Pencil className="w-5 h-5" />
+                                                                    </button>
+                                                                </ProtectedRoute>
+                                                                <ProtectedRoute>
+                                                                    <button onClick={(e) => handleDelete(projeto.id, e)} className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors" title="Excluir">
+                                                                        <Trash2 className="w-5 h-5" />
+                                                                    </button>
+                                                                </ProtectedRoute>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -391,24 +454,6 @@ export function ProjetoView({ setPageTitle }) {
                                                                     <>
                                                                         <div className="flex items-center justify-between mb-3">
                                                                             <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Itens do Projeto</div>
-                                                                            {editingProjetoId === projeto.id && (
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <button
-                                                                                        onClick={() => handleSaveEdits(projeto.id)}
-                                                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
-                                                                                        title="Salvar alterações"
-                                                                                    >
-                                                                                        <Check className="w-3.5 h-3.5" /> Salvar
-                                                                                    </button>
-                                                                                    <button
-                                                                                        onClick={handleCancelEdit}
-                                                                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-                                                                                        title="Cancelar edição"
-                                                                                    >
-                                                                                        <X className="w-3.5 h-3.5" /> Cancelar
-                                                                                    </button>
-                                                                                </div>
-                                                                            )}
                                                                         </div>
                                                                         <table className="w-full text-sm">
                                                                             <thead className="text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700/50">

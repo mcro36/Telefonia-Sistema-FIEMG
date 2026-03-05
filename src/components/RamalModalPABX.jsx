@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ModalWrapper, ModalFooter } from './ui/ModalWrapper.jsx';
 import { FormField, FormInput, FormSelect, FormSearchableSelect } from './ui/FormField.jsx';
 import { useDependencies } from '../hooks/useDependencies.js';
+import { formatResourceLabel } from '../lib/utils.js';
 
 export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
     const [formData, setFormData] = useState({
@@ -26,7 +27,7 @@ export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
         { tableName: 'unidades', columns: 'id, nome, faixa_ramais', order: { column: 'nome' } },
         { tableName: 'linhas', columns: 'id, numero', order: { column: 'numero' } },
         { tableName: 'uras', columns: 'id, nome', order: { column: 'nome' } },
-        { tableName: 'recursos_pabx', columns: '*' },
+        { tableName: 'recursos_pabx', columns: '*, unidades:unidade_id(nome)' },
         { tableName: 'ramais', columns: 'id, numero, recurso_pabx_id' }
     ], isOpen);
 
@@ -69,16 +70,7 @@ export function RamalModalPABX({ isOpen, onClose, onSave, ramalToEdit }) {
             .filter(Boolean);
 
         return recursos.map(rec => {
-            const bloco = rec.bloco?.toString() || '';
-            let prefix = '';
-
-            if (['1', '2', '3', '4', '5'].includes(bloco)) {
-                prefix = 'AF_';
-            } else if (['J', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V'].includes(bloco.toUpperCase())) {
-                prefix = 'RBA_';
-            }
-
-            const label = `${prefix}B${rec.bloco}_P${rec.porta}_${(rec.tecnologiaPadrao || 'Analogico').toUpperCase()}`;
+            const label = formatResourceLabel(rec);
 
             return {
                 value: rec.id,

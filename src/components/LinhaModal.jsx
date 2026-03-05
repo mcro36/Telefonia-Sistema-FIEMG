@@ -10,10 +10,14 @@ export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit, unitId, draft
         operadora: '',
         unidadeId: '',
         tipoPlano: 'Fixo',
+        tipoLinha: 'Linha Individual',
         status: 'Ativa'
     });
 
-    const [errors, setErrors] = useState({ numero: false, operadora: false, unidadeId: false });
+    const [rangeStart, setRangeStart] = useState('');
+    const [rangeEnd, setRangeEnd] = useState('');
+
+    const [errors, setErrors] = useState({ numero: false, operadora: false, unidadeId: false, rangeStart: false, rangeEnd: false });
 
     const { dependencies, isLoading } = useDependencies([
         { tableName: 'unidades', columns: 'id, nome', order: { column: 'nome' } }
@@ -23,21 +27,26 @@ export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit, unitId, draft
 
     useEffect(() => {
         if (isOpen) {
-            setErrors({ numero: false, operadora: false, unidadeId: false });
+            setErrors({ numero: false, operadora: false, unidadeId: false, rangeStart: false, rangeEnd: false });
+            setRangeStart('');
+            setRangeEnd('');
+
             if (linhaToEdit) {
                 let mappedType = linhaToEdit.tipoPlano;
                 if (!['Fixo', 'Móvel'].includes(mappedType)) mappedType = 'Fixo';
 
                 setFormData({
                     ...linhaToEdit,
-                    tipoPlano: mappedType
+                    tipoPlano: mappedType,
+                    tipoLinha: linhaToEdit.tipoLinha || 'Linha Individual'
                 });
             } else if (draftMode && initialData) {
                 let mappedType = initialData.tipoPlano;
                 if (!['Fixo', 'Móvel'].includes(mappedType)) mappedType = 'Fixo';
                 setFormData({
                     ...initialData,
-                    tipoPlano: mappedType
+                    tipoPlano: mappedType,
+                    tipoLinha: initialData.tipoLinha || 'Linha Individual'
                 });
             } else {
                 setFormData({
@@ -45,6 +54,7 @@ export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit, unitId, draft
                     operadora: '',
                     unidadeId: unitId || '',
                     tipoPlano: 'Fixo',
+                    tipoLinha: 'Linha Individual',
                     status: 'Ativa'
                 });
             }
@@ -88,22 +98,39 @@ export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit, unitId, draft
         setFormData({ ...formData, numero: formatted });
     }
 
-    function handleTypeChange(novoTipo) {
-        const formatted = formatPhone(formData.numero, novoTipo);
-        setFormData({ ...formData, tipoPlano: novoTipo, numero: formatted });
+    function handleRangeChange(field, val) {
+        const digits = val.replace(/\D/g, '').slice(0, 10);
+        if (field === 'start') setRangeStart(digits);
+        else setRangeEnd(digits);
     }
 
     function handleLocalSave() {
-        const newErrors = { numero: false, operadora: false, unidadeId: false };
+        const newErrors = { numero: false, operadora: false, unidadeId: false, rangeStart: false, rangeEnd: false };
         let hasError = false;
 
-        const digitCount = formData.numero.replace(/\D/g, '').length;
-        if (formData.tipoPlano === 'Fixo' && digitCount !== 10) {
-            newErrors.numero = true;
-            hasError = true;
-        } else if (formData.tipoPlano === 'Móvel' && digitCount !== 11) {
-            newErrors.numero = true;
-            hasError = true;
+        if (formData.tipoLinha === 'Linha Individual') {
+            const digitCount = formData.numero.replace(/\D/g, '').length;
+            if (formData.tipoPlano === 'Fixo' && digitCount !== 10) {
+                newErrors.numero = true;
+                hasError = true;
+            } else if (formData.tipoPlano === 'Móvel' && digitCount !== 11) {
+                newErrors.numero = true;
+                hasError = true;
+            }
+        } else {
+            // Faixa DDR
+            if (rangeStart.length !== 10) {
+                newErrors.rangeStart = true;
+                hasError = true;
+            }
+            if (rangeEnd.length !== 10) {
+                newErrors.rangeEnd = true;
+                hasError = true;
+            }
+            if (!hasError && BigInt(rangeStart) > BigInt(rangeEnd)) {
+                alert("O início da faixa não pode ser maior que o fim.");
+                hasError = true;
+            }
         }
 
         if (!formData.operadora || formData.operadora.trim() === '') {
@@ -112,13 +139,34 @@ export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit, unitId, draft
         }
 
         setErrors(newErrors);
-
         if (hasError) return;
 
-        if (draftMode && onDraftSubmit) {
-            onDraftSubmit(formData);
-        } else if (onSave) {
-            onSave(formData);
+        if (formData.tipoLinha === 'Faixa DDR') {
+            const startNum = BigInt(rangeStart);
+            const endNum = BigInt(rangeEnd);
+            const rangeSize = Number(endNum - startNum);
+
+            if (rangeSize > 100) {
+                if (!window.confirm(`Você está prestes a criar ${rangeSize + 1} linhas de uma vez. Deseja continuar?`)) return;
+            }
+
+            const records = [];
+            for (let i = startNum; i <= endNum; i++) {
+                const numStr = i.toString().padStart(10, '0');
+                const formatted = formatPhone(numStr, 'Fixo');
+                records.push({
+                    ...formData,
+                    numero: formatted,
+                    tipoLinha: 'Faixa DDR'
+                });
+            }
+            onSave(records);
+        } else {
+            if (draftMode && onDraftSubmit) {
+                onDraftSubmit(formData);
+            } else if (onSave) {
+                onSave(formData);
+            }
         }
     }
 
@@ -139,33 +187,78 @@ export function LinhaModal({ isOpen, onClose, onSave, linhaToEdit, unitId, draft
             }
         >
             <div className="space-y-6">
-                <FormField label="Tipo de Plano" required>
-                    <div className="flex gap-4 pt-1">
-                        {['Fixo', 'Móvel'].map(tipo => (
-                            <label key={tipo} className="inline-flex items-center cursor-pointer group">
-                                <input
-                                    checked={formData.tipoPlano === tipo}
-                                    onChange={() => handleTypeChange(tipo)}
-                                    className="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 dark:bg-[#111318] dark:border-slate-800 focus:ring-blue-500 focus:ring-2"
-                                    name="planType"
-                                    type="radio"
-                                />
-                                <span className="ml-2 text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors">{tipo}</span>
-                            </label>
-                        ))}
-                    </div>
-                </FormField>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <FormField label="Tipo de Plano" required>
+                        <div className="flex gap-4 pt-1">
+                            {['Fixo', 'Móvel'].map(tipo => (
+                                <label key={tipo} className="inline-flex items-center cursor-pointer group">
+                                    <input
+                                        checked={formData.tipoPlano === tipo}
+                                        onChange={() => setFormData({ ...formData, tipoPlano: tipo, tipoLinha: 'Linha Individual', numero: '' })}
+                                        className="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 dark:bg-[#111318] dark:border-slate-800 focus:ring-blue-500 focus:ring-2"
+                                        name="planType"
+                                        type="radio"
+                                    />
+                                    <span className="ml-2 text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors">{tipo}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </FormField>
 
-                <FormField label="Número" required>
-                    <FormInput
-                        icon={<Phone className="w-5 h-5" />}
-                        placeholder={formData.tipoPlano === 'Fixo' ? "(00) 0000-0000" : "(00) 00000-0000"}
-                        type="tel"
-                        value={formData.numero}
-                        onChange={handleNumberChange}
-                        error={errors.numero}
-                    />
-                </FormField>
+                    {formData.tipoPlano === 'Fixo' && !linhaToEdit && (
+                        <FormField label="Modalidade" required>
+                            <div className="flex gap-4 pt-1">
+                                {['Linha Individual', 'Faixa DDR'].map(mod => (
+                                    <label key={mod} className="inline-flex items-center cursor-pointer group">
+                                        <input
+                                            checked={formData.tipoLinha === mod}
+                                            onChange={() => setFormData({ ...formData, tipoLinha: mod })}
+                                            className="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 dark:bg-[#111318] dark:border-slate-800 focus:ring-blue-500 focus:ring-2"
+                                            name="lineModality"
+                                            type="radio"
+                                        />
+                                        <span className="ml-2 text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 transition-colors">{mod}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </FormField>
+                    )}
+                </div>
+
+                {formData.tipoLinha === 'Linha Individual' ? (
+                    <FormField label="Número" required>
+                        <FormInput
+                            icon={<Phone className="w-5 h-5" />}
+                            placeholder={formData.tipoPlano === 'Fixo' ? "(00) 0000-0000" : "(00) 00000-0000"}
+                            type="tel"
+                            value={formData.numero}
+                            onChange={handleNumberChange}
+                            error={errors.numero}
+                        />
+                    </FormField>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30 animate-in fade-in slide-in-from-top-2">
+                        <FormField label="Início da Faixa (10 dígitos)" required>
+                            <FormInput
+                                placeholder="3132321000"
+                                value={rangeStart}
+                                onChange={(e) => handleRangeChange('start', e.target.value)}
+                                error={errors.rangeStart}
+                            />
+                        </FormField>
+                        <FormField label="Fim da Faixa (10 dígitos)" required>
+                            <FormInput
+                                placeholder="3132321099"
+                                value={rangeEnd}
+                                onChange={(e) => handleRangeChange('end', e.target.value)}
+                                error={errors.rangeEnd}
+                            />
+                        </FormField>
+                        <p className="col-span-1 md:col-span-2 text-[11px] text-blue-600/70 dark:text-blue-400/70 italic px-1">
+                            * Serão criadas linhas individuais para cada número dentro da faixa informada.
+                        </p>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField label="Operadora" required>

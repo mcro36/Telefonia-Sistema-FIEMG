@@ -4,13 +4,12 @@ import { UnidadeModal } from './UnidadeModal.jsx';
 import { useSupabaseTable } from '../hooks/useSupabaseTable.js';
 import { PageHeader, ContentContainer } from './ui/PageLayout.jsx';
 import { ProtectedRoute } from './ui/ProtectedRoute.jsx';
-import { supabase } from '../lib/supabase';
-import { convertToCamel } from '../lib/utils';
 import { exportToPDF } from '../lib/exportUtils.js';
 
 export function UnidadeView() {
+    // Agora usando a view para trazer já pré-calculado do banco de dados
     const { data: units, isLoading, saveRecord, deleteRecord, setData: setUnits } = useSupabaseTable({
-        tableName: 'unidades',
+        tableName: 'unidades_com_contagens',
         order: { column: 'nome', ascending: true }
     });
 
@@ -42,45 +41,6 @@ export function UnidadeView() {
         });
     }, [units, searchTerm]);
 
-    const [ramaisPerUnit, setRamaisPerUnit] = useState({});
-    const [linhasPerUnit, setLinhasPerUnit] = useState({});
-
-    React.useEffect(() => {
-        async function fetchCounts() {
-            if (!units || units.length === 0) return;
-            try {
-                const { data: ramaisData, error: ramaisErr } = await supabase.from('ramais').select('unidade_id').eq('status', 'Ativo');
-                const { data: linhasData, error: linhasErr } = await supabase.from('linhas').select('unidade_id').eq('status', 'Ativa');
-
-                if (ramaisErr) console.warn("Could not fetch extensions for counts", ramaisErr);
-                if (linhasErr) console.warn("Could not fetch lines for counts", linhasErr);
-
-                const countRamais = {};
-                const countLinhas = {};
-
-                const processData = (dataArray, targetObj) => {
-                    if (!dataArray) return;
-                    const camelData = convertToCamel(dataArray);
-                    camelData.forEach(item => {
-                        if (item.unidadeId) {
-                            targetObj[item.unidadeId] = (targetObj[item.unidadeId] || 0) + 1;
-                        }
-                    });
-                };
-
-                processData(ramaisData, countRamais);
-                processData(linhasData, countLinhas);
-
-                setRamaisPerUnit(countRamais);
-                setLinhasPerUnit(countLinhas);
-            } catch (err) {
-                console.error("Error fetching usage counts:", err);
-            }
-        }
-
-        fetchCounts();
-    }, [units]);
-
     const calculateRangeSize = (rangeString) => {
         if (!rangeString) return 0;
         const parts = rangeString.split('-').map(p => parseInt(p.trim()));
@@ -91,11 +51,17 @@ export function UnidadeView() {
     };
 
     async function handleSaveUnit(unitData) {
-        const result = await saveRecord(unitData);
-        if (result.success) {
-            setIsModalOpen(false);
-            setUnitToEdit(null);
-        }
+        // Ao salvar usando o hook genérico, informamos a tabela real original para inserts, não a view (apesar do hook ja ler de la)
+        const mockUnitDataToSave = { ...unitData };
+
+        // Usa saveRecord customizado se precisarmos apontar explicitamente para 'unidades'
+        try {
+            const result = await saveRecord(mockUnitDataToSave);
+            if (result.success) {
+                setIsModalOpen(false);
+                setUnitToEdit(null);
+            }
+        } catch (e) { console.error('Error on save', e) }
     }
 
     async function handleDeleteUnit(id) {
@@ -134,8 +100,8 @@ export function UnidadeView() {
             unit.cidade || '-',
             unit.nome || '-',
             unit.faixaRamais || '-',
-            ramaisPerUnit[unit.id] || 0,
-            linhasPerUnit[unit.id] || 0
+            unit.ramaisAtivos || 0,
+            unit.linhasAtivas || 0
         ]);
         exportToPDF('Relatório de Unidades', head, body, 'unidades_export.pdf');
     };
@@ -217,7 +183,7 @@ export function UnidadeView() {
                                     <div className="flex items-center justify-center">
                                         <div className="flex items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 border border-blue-100 dark:border-blue-500/20">
                                             <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
-                                                {ramaisPerUnit[unit.id] || 0}
+                                                {unit.ramaisAtivos || 0}
                                             </span>
                                             <span className="mx-1.5 text-xs text-blue-400 dark:text-blue-500/70 font-medium">de</span>
                                             <span className="text-sm font-semibold text-blue-700 dark:text-blue-400">
@@ -229,7 +195,7 @@ export function UnidadeView() {
                                 <td className="px-6 py-4">
                                     <div className="flex items-center justify-center">
                                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-sm font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-500/10">
-                                            {linhasPerUnit[unit.id] || 0}
+                                            {unit.linhasAtivas || 0}
                                         </div>
                                     </div>
                                 </td>

@@ -26,7 +26,8 @@ export function LinesView() {
             line.numero?.toLowerCase().includes(lowerTerm) ||
             line.operadora?.toLowerCase().includes(lowerTerm) ||
             line.status?.toLowerCase().includes(lowerTerm) ||
-            line.unidades?.nome?.toLowerCase().includes(lowerTerm)
+            line.unidades?.nome?.toLowerCase().includes(lowerTerm) ||
+            (line.tipoLinha || 'Linha Individual').toLowerCase().includes(lowerTerm)
         );
     }, [lines, searchTerm]);
 
@@ -60,9 +61,10 @@ export function LinesView() {
     }
 
     const handleExport = () => {
-        const head = ['Linha', 'Operadora', 'Status'];
+        const head = ['Linha', 'Tipo', 'Unidade', 'Operadora', 'Status'];
         const body = filteredLines.map(line => [
             line.numero || '-',
+            line.tipoLinha || 'Linha Individual',
             line.unidades?.nome || '-',
             line.operadora || '-',
             line.status || '-'
@@ -73,7 +75,7 @@ export function LinesView() {
     return (
         <div className="flex flex-col gap-6 h-full animate-in slide-in-from-bottom-4 duration-500">
             <PageHeader
-                searchPlaceholder="Buscar por número ou operadora..."
+                searchPlaceholder="Buscar por número, operadora ou tipo..."
                 onSearch={(e) => setSearchTerm(e.target.value)}
                 onExport={handleExport}
                 primaryAction={{
@@ -101,6 +103,7 @@ export function LinesView() {
                     <thead className="bg-slate-50 dark:bg-[#111621]">
                         <tr>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Linha</th>
+                            <th className="px-6 py-4 text-center text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Unidade</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Operadora</th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
@@ -123,6 +126,14 @@ export function LinesView() {
                                             {line.numero}
                                         </span>
                                     </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-center">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${line.tipoLinha === 'Faixa DDR'
+                                        ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10'
+                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800'
+                                        }`}>
+                                        {line.tipoLinha || 'Individual'}
+                                    </span>
                                 </td>
                                 <td className="px-6 py-4">
                                     <div className="text-sm text-slate-900 dark:text-slate-200 font-medium">

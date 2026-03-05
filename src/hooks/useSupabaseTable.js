@@ -1,18 +1,22 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import { convertToCamel, convertToSnake, toSnake } from '../lib/utils';
 
 /**
  * Hook customizado para gerenciar leitura, criação, atualização e exclusão
- * de dados em uma tabela do Supabase com conversão automática camelCase.
+ * de dados em uma tabela do Supabase com conversão automática camelCase e cache via React Query.
  */
 export function useSupabaseTable({ tableName, selectQuery = '*', order = null }) {
-    const [data, setData] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const queryClient = useQueryClient();
 
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        try {
+    // Serializar a chave de ordem para evitar re-fetches infinitos se a prop order mudar de referência
+    const orderKey = order ? `${order.column}_${order.ascending}` : 'none';
+    const queryKey = useMemo(() => [tableName, selectQuery, orderKey], [tableName, selectQuery, orderKey]);
+
+    const { data = [], isLoading, refetch } = useQuery({
+        queryKey,
+        queryFn: async () => {
             let query = supabase.from(tableName).select(selectQuery);
 
             if (order) {
@@ -22,71 +26,66 @@ export function useSupabaseTable({ tableName, selectQuery = '*', order = null })
 
             const { data: result, error } = await query;
             if (error) throw error;
-            if (result) setData(convertToCamel(result));
-        } catch (error) {
-            console.error(`Error fetching ${tableName}:`, error);
-        } finally {
-            setIsLoading(false);
+            return result ? convertToCamel(result) : [];
         }
-    }, [tableName, selectQuery, order?.column, order?.ascending]);
+    });
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+    const setData = useCallback((updater) => {
+        // Mock setData function for optimistic updates implemented by existing views
+        queryClient.setQueryData(queryKey, updater);
+    }, [queryClient, queryKey]);
 
-    const saveRecord = async (recordData) => {
-        try {
-            // Sanitizador Automatizado para o Supabase
-            const cleanData = {};
+    const saveMutation = useMutation({
+        mutationFn: async (recordData) => {
+            const isArray = Array.isArray(recordData);
+            const recordsToProcess = isArray ? recordData : [recordData];
 
-            Object.keys(recordData).forEach(key => {
-                const value = recordData[key];
-
-                // Ignorar objetos com relacionamentos aninhados ou arrays (joins do supabase)
-                // Ex: unidades: { nome: 'SESI' } ou linhas: [...]
-                if (key === 'unidades' || key === 'linhas' || (value !== null && typeof value === 'object')) {
-                    return;
-                }
-
-                // Campos que só existem no frontend ou são calculados e não devem ir para o DB
-                if (['tipoPlano', 'linhasAtivas', 'ramaisAtivas', 'ramaisAtivos', 'totalRamais'].includes(key)) {
-                    return;
-                }
-
-                // Converter string vazia para null APENAS para chaves estrangeiras (terminam em Id)
-                // Isso evita erros 'not-null' em colunas obrigatórias como 'cidade'
-                if (typeof value === 'string' && value.trim() === '' && key.endsWith('Id')) {
-                    cleanData[key] = null;
-                } else {
-                    cleanData[key] = value;
-                }
+            const snakeRecords = recordsToProcess.map(record => {
+                const cleanData = {};
+                Object.keys(record).forEach(key => {
+                    const value = record[key];
+                    // Clean external relations
+                    if (key === 'unidades' || key === 'linhas' || (value !== null && typeof value === 'object')) {
+                        return;
+                    }
+                    // Clean aggregates and injected frontend states
+                    if (['tipoPlano', 'linhasAtivas', 'ramaisAtivas', 'ramaisAtivos', 'totalRamais', 'microsipUser', 'microsipPass', 'redirecionamentoEnabled', 'salto1', 'salto2', 'salto3', 'grupoCapturaEnabled', 'grupoCaptura'].includes(key)) {
+                        return;
+                    }
+                    if (typeof value === 'string' && value.trim() === '' && (key.endsWith('Id') || ['ddr', 'ura'].includes(key))) {
+                        cleanData[key] = null;
+                    } else {
+                        cleanData[key] = value;
+                    }
+                });
+                return convertToSnake(cleanData);
             });
 
-            // Converter chaves de camelCase para snake_case para o banco de dados
-            const snakeData = convertToSnake(cleanData);
-
-            console.log(`[useSupabaseTable] Salvando em ${tableName}:`, { cleanData, snakeData });
-
-            if (snakeData.id && typeof snakeData.id === 'string' && !snakeData.id.includes('.')) {
+            if (!isArray && snakeRecords[0].id && typeof snakeRecords[0].id === 'string' && !snakeRecords[0].id.includes('.')) {
+                // UPDATE (Single)
                 const { error } = await supabase
                     .from(tableName)
-                    .update(snakeData)
-                    .eq('id', snakeData.id);
+                    .update(snakeRecords[0])
+                    .eq('id', snakeRecords[0].id);
                 if (error) throw error;
             } else {
-                // Remove o ID temporário/falso se existir antes de inserir
-                const { id, ...insertData } = snakeData;
+                // INSERT (Single or Multiple)
+                // Remove IDs temporários antes de inserir
+                const insertData = snakeRecords.map(({ id, ...rest }) => rest);
                 const { error } = await supabase
                     .from(tableName)
-                    .insert([insertData]);
+                    .insert(insertData);
                 if (error) throw error;
             }
-            await fetchData();
-            return { success: true };
-        } catch (error) {
+            return true;
+        },
+        onSuccess: () => {
+            // Invalidate all queries that belong to this table
+            queryClient.invalidateQueries({ queryKey: [tableName] });
+        },
+        onError: (error) => {
             console.group(`[useSupabaseTable] Erro Crítico ao salvar ${tableName}`);
             console.error("Detalhes do erro:", error);
-            console.error("Configuração Supabase:", { url: supabase.supabaseUrl });
             console.groupEnd();
 
             const isPermissionError = error.code === '42501' || error.status === 403;
@@ -95,15 +94,33 @@ export function useSupabaseTable({ tableName, selectQuery = '*', order = null })
                 : (error.message || 'Verifique sua conexão ou o formato dos dados.');
 
             alert(`Falha ao salvar no banco de dados:\n${message}`);
+        }
+    });
+
+    const deleteMutation = useMutation({
+        mutationFn: async (id) => {
+            const { error } = await supabase.from(tableName).delete().eq('id', id);
+            if (error) throw error;
+            return id;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [tableName] });
+        }
+    });
+
+
+    const saveRecord = async (recordData) => {
+        try {
+            await saveMutation.mutateAsync(recordData);
+            return { success: true };
+        } catch (error) {
             return { success: false, error };
         }
     };
 
     const deleteRecord = async (id) => {
         try {
-            const { error } = await supabase.from(tableName).delete().eq('id', id);
-            if (error) throw error;
-            await fetchData();
+            await deleteMutation.mutateAsync(id);
             return { success: true };
         } catch (error) {
             console.error(`Error deleting ${tableName}:`, error);
@@ -111,5 +128,5 @@ export function useSupabaseTable({ tableName, selectQuery = '*', order = null })
         }
     };
 
-    return { data, isLoading, fetchData, saveRecord, deleteRecord, setData };
+    return { data, isLoading, fetchData: refetch, saveRecord, deleteRecord, setData };
 }

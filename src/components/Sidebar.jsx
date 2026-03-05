@@ -8,7 +8,9 @@ import {
     LogOut,
     ChevronRight,
     Briefcase,
-    ShieldCheck
+    ShieldCheck,
+    Router,
+    HeadphonesIcon
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -24,11 +26,12 @@ const menuItems = [
     { id: 'units', label: 'Unidades', icon: Building2 },
     { id: 'lines', label: 'Linhas', icon: ListOrdered },
     { id: 'extensions', label: 'Ramais', icon: Phone },
+    { id: 'physical_ports', label: 'Portas Físicas', icon: Router },
     { id: 'ura', label: 'URA', icon: Bot },
     { id: 'projects', label: 'Projetos', icon: Briefcase },
 ];
 
-export function Sidebar({ activeTab, setActiveTab }) {
+export function Sidebar({ activeTab, setActiveTab, onOpenGerenciamento, onOpenSolicitacao }) {
     const { hasRole } = useAuth();
 
     return (
@@ -46,6 +49,14 @@ export function Sidebar({ activeTab, setActiveTab }) {
             </div>
 
             <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+                <button
+                    onClick={onOpenSolicitacao}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-500 hover:bg-blue-100 dark:hover:bg-blue-500/20 font-semibold mb-4 shadow-sm border border-blue-100 dark:border-blue-500/20 group cursor-pointer"
+                >
+                    <HeadphonesIcon className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    <span className="text-sm">Solicitar Serviço</span>
+                </button>
+
                 {menuItems.map((item) => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;

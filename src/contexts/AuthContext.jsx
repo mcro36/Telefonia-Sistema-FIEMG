@@ -28,14 +28,16 @@ export function AuthProvider({ children }) {
             return;
         }
 
-        const metadata = session.user.user_metadata || {};
+        const userMetadata = session.user.user_metadata || {};
+        const appMetadata = session.user.app_metadata || {};
+
         setUser({
             id: session.user.id,
             email: session.user.email,
-            name: metadata.name || session.user.email.split('@')[0],
-            role: metadata.role || 'Viewer', // Default
-            avatarInitials: metadata.avatarInitials || session.user.email[0].toUpperCase(),
-            is_active: metadata.is_active ?? true
+            name: userMetadata.name || session.user.email.split('@')[0],
+            role: appMetadata.role || userMetadata.role || 'Viewer', // Default
+            avatarInitials: userMetadata.avatarInitials || session.user.email[0].toUpperCase(),
+            is_active: userMetadata.is_active ?? true
         });
     };
 

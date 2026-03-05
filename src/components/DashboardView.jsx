@@ -22,6 +22,7 @@ import { convertToCamel } from '../lib/utils.js';
 export function DashboardView() {
     const [stats, setStats] = React.useState([
         { label: 'Total de Unidades', value: '...', icon: Building2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+        { label: 'Ramais PABX Ativos', value: '...', icon: PhoneCall, color: 'text-amber-500', bg: 'bg-amber-500/10' },
         { label: 'Ramais SIP Ativos', value: '...', icon: PhoneCall, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
         { label: 'Linhas', value: '...', icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10' },
     ]);
@@ -33,110 +34,77 @@ export function DashboardView() {
     React.useEffect(() => {
         async function loadDashboardData() {
             try {
-                // 1. Unidades count
-                const { count: unidadesCount, error: uErr } = await supabase
-                    .from('unidades')
-                    .select('*', { count: 'exact', head: true });
+                // 1. Chamar a RPC unificada (Retorna instantaneamente os totais direto do Postgres)
+                const { data: dbSummary, error: rpcErr } = await supabase.rpc('get_dashboard_summary');
 
-                // 2. Ramais SIP ativos count
-                const { count: sipCount, error: sErr } = await supabase
-                    .from('ramais')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('tipo', 'SIP')
-                    .eq('status', 'Ativo');
-
-                // 3. Linhas (todas cadastradas)
-                const { count: linhasCount, error: lErr } = await supabase
-                    .from('linhas')
-                    .select('*', { count: 'exact', head: true });
-
-                if (!uErr && !sErr && !lErr) {
-                    setStats([
-                        { label: 'Total de Unidades', value: unidadesCount?.toString() || '0', icon: Building2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-                        { label: 'Ramais SIP Ativos', value: sipCount?.toString() || '0', icon: PhoneCall, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
-                        { label: 'Linhas', value: linhasCount?.toString() || '0', icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-                    ]);
+                if (rpcErr) {
+                    console.error("Dashboard RPC dataload err:", rpcErr);
+                    return;
                 }
 
-                // 4. Gráfico: Ramais cadastrados por mês (últimos 6 meses)
-                const { data: ramaisAllDatesRaw } = await supabase.from('ramais').select('created_at');
-                const ramaisAllDates = convertToCamel(ramaisAllDatesRaw);
-                if (ramaisAllDates) {
+                if (dbSummary) {
+                    // Update main cards
+                    setStats([
+                        { label: 'Total de Unidades', value: dbSummary.unidades?.toString() || '0', icon: Building2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                        { label: 'Ramais PABX Ativos', value: dbSummary.pabxAtivos?.toString() || '0', icon: PhoneCall, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+                        { label: 'Ramais SIP Ativos', value: dbSummary.sipAtivos?.toString() || '0', icon: PhoneCall, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                        { label: 'Linhas', value: dbSummary.linhas?.toString() || '0', icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+                    ]);
+
+                    // Update Top 5 Regions
+                    const convertedRegions = (dbSummary.ramaisPorRegiao || []).map(r => ({
+                        label: r.cidade,
+                        value: r.total,
+                        total: (dbSummary.pabxAtivos + dbSummary.sipAtivos) || 1
+                    }));
+                    setRegions(convertedRegions);
+
+                    // Reconstruct the 6-month chart format
                     const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
                     const monthlyCounts = {};
                     const now = new Date();
 
-                    // Inicializar últimos 6 meses
+                    // Pre-fill last 6 months 
                     for (let i = 5; i >= 0; i--) {
                         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
                         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                         monthlyCounts[key] = { name: monthNames[d.getMonth()], value: 0 };
                     }
 
-                    ramaisAllDates.forEach(r => {
-                        if (!r.createdAt) return;
-                        const d = new Date(r.createdAt);
-                        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                        if (monthlyCounts[key]) {
-                            monthlyCounts[key].value += 1;
+                    // Fill with RPC data
+                    (dbSummary.ramaisPorMes || []).forEach(r => {
+                        if (monthlyCounts[r.mes]) {
+                            monthlyCounts[r.mes].value = r.total;
                         }
                     });
 
                     const sortedData = Object.values(monthlyCounts);
-                    setChartData(sortedData);
+
+                    // We must calculate a cumulative sum to match the old behavior
+                    let cumulative = 0;
+                    const cumulativeData = sortedData.map(d => {
+                        cumulative += d.value;
+                        return { ...d, value: cumulative };
+                    });
+
+                    setChartData(cumulativeData);
 
                     // Calcular crescimento mês-a-mês
-                    if (sortedData.length >= 2) {
-                        const prev = sortedData[sortedData.length - 2].value;
-                        const curr = sortedData[sortedData.length - 1].value;
+                    if (cumulativeData.length >= 2) {
+                        const prev = cumulativeData[cumulativeData.length - 2].value;
+                        const curr = cumulativeData[cumulativeData.length - 1].value;
                         if (prev > 0) {
                             const pct = (((curr - prev) / prev) * 100).toFixed(1);
                             setChartGrowth(pct);
+                        } else if (curr > 0) {
+                            setChartGrowth('100.0');
+                        } else {
+                            setChartGrowth('0.0');
                         }
                     }
                 }
-
-                // 5. Ramais por Região (cidade)
-                const { data: unitsDataRaw } = await supabase.from('unidades').select('id, cidade');
-                const { data: ramaisDataRaw } = await supabase.from('ramais').select('unidade_id');
-
-                const unitsData = convertToCamel(unitsDataRaw);
-                const ramaisData = convertToCamel(ramaisDataRaw);
-
-                if (unitsData) {
-                    const unitCityMap = {};
-                    unitsData.forEach(u => {
-                        unitCityMap[u.id] = u.cidade || 'Não informada';
-                    });
-
-                    const regionCounts = {};
-                    let totalRamais = 0;
-
-                    if (ramaisData) {
-                        ramaisData.forEach(e => {
-                            const uId = e.unidadeId;
-                            if (uId && unitCityMap[uId]) {
-                                const city = unitCityMap[uId];
-                                regionCounts[city] = (regionCounts[city] || 0) + 1;
-                                totalRamais++;
-                            }
-                        });
-                    }
-
-                    const sortedRegions = Object.keys(regionCounts)
-                        .map(city => ({
-                            label: city,
-                            value: regionCounts[city],
-                            total: totalRamais > 0 ? totalRamais : 1
-                        }))
-                        .sort((a, b) => b.value - a.value)
-                        .slice(0, 5);
-
-                    setRegions(sortedRegions);
-                }
-
             } catch (err) {
-                console.error("Dashboard dataload err:", err);
+                console.error("Dashboard dataload exception:", err);
             }
         }
 
@@ -145,14 +113,8 @@ export function DashboardView() {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Visão Geral</h1>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Monitoramento em tempo real do sistema de telefonia.</p>
-                </div>
-            </header>
 
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 {stats.map((stat, i) => (
                     <div key={i} className="bg-white dark:bg-[#1c1f26] p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between hover:border-blue-500/50 dark:hover:border-blue-500/50 transition-colors">
                         <div>

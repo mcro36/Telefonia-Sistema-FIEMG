@@ -10,6 +10,7 @@ import { supabase } from './lib/supabase.js';
 import { useTheme } from './hooks/useTheme.js';
 import { UraView } from './components/UraView.jsx';
 import { ProjetoView } from './components/ProjetoView.jsx';
+import { BlocoPortasView } from './components/BlocoPortasView.jsx';
 import { GerenciamentoContaModal } from './components/GerenciamentoContaModal.jsx';
 import { useAuth } from './contexts/AuthContext.jsx';
 import { User, Settings, ShieldCheck, LogOut, ChevronRight, Key, HeadphonesIcon } from 'lucide-react';
@@ -150,21 +151,6 @@ export default function App() {
                         <span>IEL</span>
                     </div>
                 </motion.div>
-
-                {/* Botão Flutuante de Solicitação Nova */}
-                <button
-                    onClick={() => setIsFormularioModalOpen(true)}
-                    className="absolute bottom-6 left-6 flex items-center gap-2 px-5 py-3 rounded-full bg-white dark:bg-[#1c1f26] border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-500 shadow-lg hover:shadow-xl transition-all font-semibold text-sm group"
-                >
-                    <HeadphonesIcon className="w-5 h-5 text-blue-500 group-hover:scale-110 transition-transform" />
-                    Solicitar serviço de telefonia
-                </button>
-
-                {/* Modal de Solicitação Externa */}
-                <FormularioModal
-                    isOpen={isFormularioModalOpen}
-                    onClose={() => setIsFormularioModalOpen(false)}
-                />
             </div>
         );
     }
@@ -175,6 +161,7 @@ export default function App() {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 onOpenGerenciamento={() => setIsGerenciamentoModalOpen(true)}
+                onOpenSolicitacao={() => setIsFormularioModalOpen(true)}
             />
 
             <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
@@ -188,7 +175,8 @@ export default function App() {
                                         activeTab === 'extensions' ? 'Gerenciamento de Ramais' :
                                             activeTab === 'ura' ? 'Gerenciamento de URA' :
                                                 activeTab === 'projects' ? (customTitle || 'Gerenciamento de Projetos') :
-                                                    'Console Administrativo'}
+                                                    activeTab === 'physical_ports' ? 'Gestão de Portas Físicas' :
+                                                        'Console Administrativo'}
                         </h2>
                     </div>
                     <div className="flex items-center gap-4">
@@ -293,9 +281,10 @@ export default function App() {
                                 {activeTab === 'dashboard' && <DashboardView />}
                                 {activeTab === 'units' && <UnidadeView />}
                                 {activeTab === 'lines' && <LinesView />}
-                                {activeTab === 'extensions' && <ExtensionsView />}
+                                {activeTab === 'extensions' && <ExtensionsView setActiveTab={setActiveTab} />}
                                 {activeTab === 'ura' && <UraView />}
                                 {activeTab === 'projects' && <ProjetoView setPageTitle={setCustomTitle} />}
+                                {activeTab === 'physical_ports' && <BlocoPortasView />}
                             </motion.div>
                         </AnimatePresence>
                     </div>
@@ -314,6 +303,11 @@ export default function App() {
             <TrocaSenhaModal
                 isOpen={isTrocaSenhaModalOpen}
                 onClose={() => setIsTrocaSenhaModalOpen(false)}
+            />
+
+            <FormularioModal
+                isOpen={isFormularioModalOpen}
+                onClose={() => setIsFormularioModalOpen(false)}
             />
         </div>
     );

@@ -22,8 +22,13 @@ export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit, unitId, dr
         grupoCaptura: ''
     });
 
-    const [errors, setErrors] = useState({ nome: false, numero: false });
+    const [errors, setErrors] = useState({ nome: false, numero: false, faixaDe: false, faixaAte: false });
     const [showPassword, setShowPassword] = useState(false);
+
+    // States do lote (faixa)
+    const [isFaixa, setIsFaixa] = useState(false);
+    const [faixaDe, setFaixaDe] = useState('');
+    const [faixaAte, setFaixaAte] = useState('');
 
     // Fetch dependencies
     const { dependencies, isLoading } = useDependencies([
@@ -73,7 +78,7 @@ export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit, unitId, dr
     }, [isOpen, ramalToEdit, initialData, draftMode, unitId]);
 
     function handleLocalSave() {
-        const newErrors = { nome: false, numero: false };
+        const newErrors = { nome: false, numero: false, faixaDe: false, faixaAte: false };
         let hasError = false;
 
         if (!formData.nome || formData.nome.trim() === '') {
@@ -81,52 +86,128 @@ export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit, unitId, dr
             hasError = true;
         }
 
-        if (!formData.numero || formData.numero.trim() === '') {
-            newErrors.numero = true;
-            hasError = true;
-        }
+        if (isFaixa) {
+            if (!faixaDe || faixaDe.trim() === '') { newErrors.faixaDe = true; hasError = true; }
+            if (!faixaAte || faixaAte.trim() === '') { newErrors.faixaAte = true; hasError = true; }
+            if (hasError) { setErrors(newErrors); return; }
 
-        setErrors(newErrors);
-        if (hasError) return;
+            if (!/^\d{4}$/.test(faixaDe) || !/^\d{4}$/.test(faixaAte)) {
+                alert('Os ramais da faixa devem conter exatamente 4 dígitos numéricos.');
+                setErrors({ ...newErrors, faixaDe: true, faixaAte: true });
+                return;
+            }
 
-        // VALIDAÇÃO 1: Deve ser composto por exatamente 4 dígitos numéricos
-        if (!/^\d{4}$/.test(formData.numero)) {
-            alert('O ramal deve conter exatamente 4 dígitos numéricos (ex: 2001).');
-            setErrors({ ...newErrors, numero: true });
-            return;
-        }
+            const start = parseInt(faixaDe, 10);
+            const end = parseInt(faixaAte, 10);
 
-        // VALIDAÇÃO 2: Verificar duplicidade do número do ramal (ignorando a si mesmo se for edição)
-        const currentId = ramalToEdit ? ramalToEdit.id : undefined;
-        const ramalExists = ramaisExistentes.some(r => r.numero === formData.numero && r.id !== currentId);
+            if (start > end) {
+                alert('O valor inicial da faixa ("De") não pode ser maior que o final ("Até").');
+                setErrors({ ...newErrors, faixaDe: true });
+                return;
+            }
 
-        if (ramalExists) {
-            alert(`O ramal ${formData.numero} já está cadastrado no sistema! Por favor, escolha outro número.`);
-            setErrors({ ...newErrors, numero: true });
-            return;
-        }
+            if (end - start > 100) {
+                alert('Por favor, limite a criação para no máximo 100 ramais por vez por questões de performance e segurança.');
+                return;
+            }
 
-        // VALIDAÇÃO 3: Verificar se o ramal pertence à faixa de ramais da Unidade escolhida
-        if (formData.unidadeId) {
-            const unidadeSelecionada = unidades.find(u => u.id === formData.unidadeId);
-            if (unidadeSelecionada && unidadeSelecionada.faixaRamais) {
-                const [inicioStr, fimStr] = unidadeSelecionada.faixaRamais.split(' - ');
-                const inicio = parseInt(inicioStr, 10);
-                const fim = parseInt(fimStr, 10);
-                const numeroRamal = parseInt(formData.numero, 10);
-
-                if (!isNaN(inicio) && !isNaN(fim) && (numeroRamal < inicio || numeroRamal > fim)) {
-                    alert(`Não permitido: O ramal ${numeroRamal} está fora da "Faixa de Ramais" permitida na unidade ${unidadeSelecionada.nome} (${unidadeSelecionada.faixaRamais}).`);
-                    setErrors({ ...newErrors, numero: true });
-                    return;
+            // VALIDAÇÃO: Existência no Banco
+            const conflicts = [];
+            for (let i = start; i <= end; i++) {
+                const strNum = String(i).padStart(4, '0');
+                if (ramaisExistentes.some(r => r.numero === strNum)) {
+                    conflicts.push(strNum);
                 }
             }
-        }
 
-        if (draftMode && onDraftSubmit) {
-            onDraftSubmit({ ...formData, tipo: 'SIP' });
-        } else if (onSave) {
-            onSave({ ...formData, tipo: 'SIP' });
+            if (conflicts.length > 0) {
+                alert(`Os seguintes ramais já estão cadastrados no sistema e não podem ser criados:\n${conflicts.join(', ')}`);
+                setErrors({ ...newErrors, faixaDe: true, faixaAte: true });
+                return;
+            }
+
+            // VALIDAÇÃO: Limites da unidade
+            if (formData.unidadeId) {
+                const unidadeSelecionada = unidades.find(u => u.id === formData.unidadeId);
+                if (unidadeSelecionada && unidadeSelecionada.faixaRamais) {
+                    const [inicioStr, fimStr] = unidadeSelecionada.faixaRamais.split(' - ');
+                    const limitStart = parseInt(inicioStr, 10);
+                    const limitEnd = parseInt(fimStr, 10);
+
+                    if (!isNaN(limitStart) && !isNaN(limitEnd)) {
+                        if (start < limitStart || end > limitEnd) {
+                            alert(`A faixa solicitada (${start} até ${end}) excede a "Faixa de Ramais" permitida na unidade ${unidadeSelecionada.nome} (${unidadeSelecionada.faixaRamais}).`);
+                            setErrors({ ...newErrors, faixaDe: true, faixaAte: true });
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // Constroi o Payload em Lote (Array)
+            const payloadArray = [];
+            for (let i = start; i <= end; i++) {
+                payloadArray.push({
+                    ...formData,
+                    numero: String(i).padStart(4, '0'),
+                    tipo: 'SIP'
+                });
+            }
+
+            if (draftMode && onDraftSubmit) {
+                onDraftSubmit(payloadArray);
+            } else if (onSave) {
+                onSave(payloadArray);
+            }
+
+        } else {
+            if (!formData.numero || formData.numero.trim() === '') {
+                newErrors.numero = true;
+                hasError = true;
+            }
+
+            setErrors(newErrors);
+            if (hasError) return;
+
+            // VALIDAÇÃO 1: Deve ser composto por exatamente 4 dígitos numéricos
+            if (!/^\d{4}$/.test(formData.numero)) {
+                alert('O ramal deve conter exatamente 4 dígitos numéricos (ex: 2001).');
+                setErrors({ ...newErrors, numero: true });
+                return;
+            }
+
+            // VALIDAÇÃO 2: Verificar duplicidade do número do ramal (ignorando a si mesmo se for edição)
+            const currentId = ramalToEdit ? ramalToEdit.id : undefined;
+            const ramalExists = ramaisExistentes.some(r => r.numero === formData.numero && r.id !== currentId);
+
+            if (ramalExists) {
+                alert(`O ramal ${formData.numero} já está cadastrado no sistema! Por favor, escolha outro número.`);
+                setErrors({ ...newErrors, numero: true });
+                return;
+            }
+
+            // VALIDAÇÃO 3: Verificar se o ramal pertence à faixa de ramais da Unidade escolhida
+            if (formData.unidadeId) {
+                const unidadeSelecionada = unidades.find(u => u.id === formData.unidadeId);
+                if (unidadeSelecionada && unidadeSelecionada.faixaRamais) {
+                    const [inicioStr, fimStr] = unidadeSelecionada.faixaRamais.split(' - ');
+                    const inicio = parseInt(inicioStr, 10);
+                    const fim = parseInt(fimStr, 10);
+                    const numeroRamal = parseInt(formData.numero, 10);
+
+                    if (!isNaN(inicio) && !isNaN(fim) && (numeroRamal < inicio || numeroRamal > fim)) {
+                        alert(`Não permitido: O ramal ${numeroRamal} está fora da "Faixa de Ramais" permitida na unidade ${unidadeSelecionada.nome} (${unidadeSelecionada.faixaRamais}).`);
+                        setErrors({ ...newErrors, numero: true });
+                        return;
+                    }
+                }
+            }
+
+            if (draftMode && onDraftSubmit) {
+                onDraftSubmit({ ...formData, tipo: 'SIP' });
+            } else if (onSave) {
+                onSave({ ...formData, tipo: 'SIP' });
+            }
         }
     }
 
@@ -165,14 +246,50 @@ export function RamalModalSIP({ isOpen, onClose, onSave, ramalToEdit, unitId, dr
                         </FormField>
 
                         <div className="flex gap-4">
-                            <FormField label="Ramal" required className="flex-1">
-                                <FormInput
-                                    placeholder="Ex: 2001"
-                                    value={formData.numero}
-                                    onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
-                                    error={errors.numero}
-                                />
-                            </FormField>
+                            <div className="flex-1 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                        Ramal <span className="text-red-500 ml-1">*</span>
+                                    </label>
+                                    {!ramalToEdit && !initialData && (
+                                        <label className="inline-flex items-center cursor-pointer text-xs group">
+                                            <input
+                                                type="checkbox"
+                                                checked={isFaixa}
+                                                onChange={(e) => setIsFaixa(e.target.checked)}
+                                                className="mr-1.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 bg-white"
+                                            />
+                                            <span className="text-slate-500 font-medium group-hover:text-blue-600 transition-colors">Criar faixa de ramais</span>
+                                        </label>
+                                    )}
+                                </div>
+
+                                {!isFaixa ? (
+                                    <FormInput
+                                        placeholder="Ex: 2001"
+                                        value={formData.numero}
+                                        onChange={(e) => setFormData({ ...formData, numero: e.target.value })}
+                                        error={errors.numero}
+                                        disabled={isFaixa}
+                                    />
+                                ) : (
+                                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                                        <FormInput
+                                            placeholder="De (Ex: 2001)"
+                                            value={faixaDe}
+                                            onChange={(e) => setFaixaDe(e.target.value)}
+                                            error={errors.faixaDe}
+                                        />
+                                        <span className="text-slate-500 text-sm font-medium">até</span>
+                                        <FormInput
+                                            placeholder="Até (Ex: 2005)"
+                                            value={faixaAte}
+                                            onChange={(e) => setFaixaAte(e.target.value)}
+                                            error={errors.faixaAte}
+                                        />
+                                    </div>
+                                )}
+                            </div>
 
                             <div className="flex flex-col justify-end pb-2">
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">

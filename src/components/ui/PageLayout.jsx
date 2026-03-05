@@ -2,7 +2,7 @@ import React from 'react';
 import { Search, Filter, Download, Loader2 } from 'lucide-react';
 import { ProtectedRoute } from './ProtectedRoute.jsx';
 
-export function PageHeader({ searchPlaceholder, onSearch, onExport, primaryAction, extraActions }) {
+export function PageHeader({ searchPlaceholder, onSearch, onExport, primaryAction, extraActions, filterAction }) {
     return (
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white dark:bg-[#1c1f26] p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm transition-colors">
             <div className="relative w-full sm:max-w-md">
@@ -17,10 +17,20 @@ export function PageHeader({ searchPlaceholder, onSearch, onExport, primaryActio
                 />
             </div>
             <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
-                <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <Filter className="w-4 h-4" />
-                    <span className="hidden sm:inline">Filtros</span>
-                </button>
+                {filterAction ? (
+                    <button
+                        onClick={filterAction.onClick}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                        {filterAction.icon || <Filter className="w-4 h-4" />}
+                        <span className="hidden sm:inline">{filterAction.label || 'Filtros'}</span>
+                    </button>
+                ) : (
+                    <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 dark:border-slate-800 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        <Filter className="w-4 h-4" />
+                        <span className="hidden sm:inline">Filtros</span>
+                    </button>
+                )}
                 {onExport && (
                     <button
                         onClick={onExport}

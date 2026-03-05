@@ -1,0 +1,13 @@
+{
+  "ignoreUnresolved": [],
+  "ignoreUnused": [
+    "@google/genai",
+    "@tailwindcss/vite",
+    "@vitejs/plugin-react",
+    "dotenv",
+    "gh-pages",
+    "sip.js",
+    "ws"
+  ],
+  "ignoreUnimported": []
+}
